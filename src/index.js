@@ -12,7 +12,8 @@ import { WeiPerEther } from '@ethersproject/constants'
 
 const geneChainId = 8080
 const rewardPerBlock = 2
-const rewardPerDay = rewardPerBlock * 28800
+const rewardShare = 0.8
+const rewardPerDay = rewardPerBlock * rewardShare * 28800
 const rewardPerYear = rewardPerDay * 365
 
 const currentUrl = new URL(window.location.href)
