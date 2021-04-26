@@ -1,5 +1,6 @@
 import 'bootstrap/js/dist/modal'
 import 'bootstrap/js/dist/popover'
+import 'bootstrap/js/dist/toast'
 import bootbox from 'bootbox'
 import 'backbone'
 import _ from 'underscore'
@@ -78,6 +79,7 @@ const onClickConnect = async () => {
 }
 
 const handleNewAccounts = async (newAccounts) => {
+  $('.toast').remove()
   accounts = newAccounts
   var account = accounts[0]
   var bal = await ethereum.request({
@@ -409,20 +411,58 @@ var stakeDialog = {
         .stake(this.model.get('validator'), arm, { value: rna })
         .then((result) => {
           console.debug(result)
+          var toast = $(
+            _.template($('#toast-template').html())({
+              title: 'Waiting for confirmation',
+              decor: '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>',
+              message: 'Transaction hash: <samp class="text-break">' + result.hash + '</samp>'
+            })
+          )
+            .appendTo($('#toastHolder'))
+            .toast({ autohide: false })
+            .toast('show')
+            .on('hidden.bs.toast', function (data) {
+              data.currentTarget.remove()
+            })
+          $('#stakeDialog').modal('hide')
+
           result
             .wait()
             .then((receipt) => {
               console.debug(receipt)
-              if (receipt.status != 1) {
-                alertError('Transaction failed, hash ' + receipt.transactionHash + '')
-              } else {
-                bootbox.alert('Stake suceeded', reloadValidators)
-                $('#stakeDialog').modal('hide')
-              }
+              $(
+                _.template($('#toast-template').html())({
+                  title: receipt.status == 1 ? 'Transaction suceeded' : 'Transaction Failed',
+                  decor:
+                    '<i class="bi ' +
+                    (receipt.status == 1 ? 'bi-check-circle-fill text-success' : 'bi-x-circle-fill text-danger') +
+                    '"></i>',
+                  message: 'Transaction hash: <samp class="text-break">' + receipt.transactionHash + '</samp>'
+                })
+              )
+                .appendTo($('#toastHolder'))
+                .toast('show')
+                .on('hidden.bs.toast', function (data) {
+                  data.currentTarget.remove()
+                })
             })
             .catch((error) => {
               console.error(error)
-              alertError(JSON.stringify(error, Object.getOwnPropertyNames(error)))
+              $(
+                _.template($('#toast-template').html())({
+                  title: 'Transaction Failed',
+                  decor: '<i class="bi bi-x-circle text-danger"></i>',
+                  message: 'Transaction hash: <samp class="text-break">' + receipt.transactionHash + '</samp>'
+                })
+              )
+                .appendTo($('#toastHolder'))
+                .toast('show')
+                .on('hidden.bs.toast', function (data) {
+                  data.currentTarget.remove()
+                })
+            })
+            .finally(function () {
+              toast.remove()
             })
         })
         .catch((error) => {
