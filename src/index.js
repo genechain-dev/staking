@@ -1,7 +1,6 @@
 import 'bootstrap/js/dist/modal'
 import 'bootstrap/js/dist/popover'
 import 'bootstrap/js/dist/toast'
-import bootbox from 'bootbox'
 import 'backbone'
 import _ from 'underscore'
 import MetaMaskOnboarding from '@metamask/onboarding'
@@ -24,6 +23,9 @@ const { isMetaMaskInstalled } = MetaMaskOnboarding
 
 let onboarding
 let accounts
+let accountData = { address: '', balance: 0, balanceARM: 0, profit: 0 }
+let networkData = { chainId: 0, lastBlock: 0 }
+let subscriptions = { newBlock: 0 }
 
 const initialize = async () => {
   try {
@@ -35,17 +37,58 @@ const initialize = async () => {
 }
 window.addEventListener('DOMContentLoaded', initialize)
 
-function alertError() {
-  var message,
-    title = ''
-  if (arguments.length > 1) {
-    title = '<h5 class="alert-heading">' + arguments[0] + '</h5>'
-    message = arguments[1]
-  } else {
-    message = arguments[0]
-  }
-  message = '<div class="alert alert-danger" role="alert">' + title + '<samp class="small">' + message + '</samp></div>'
-  bootbox.alert({ message: message, backdrop: true, closeButton: false })
+function alertError(params) {
+  var data = _.extend(
+    {
+      title: '',
+      titleClasses: '',
+      closeButton: true,
+      buttons: '',
+      message: '',
+      bodyClasses: 'alert alert-danger m-0',
+      error: ''
+    },
+    typeof params === 'string' || params instanceof String ? { message: params } : params
+  )
+  if (data.error && data.error.data)
+    data.error.details = JSON.stringify(data.error.data, Object.getOwnPropertyNames(data.error.data))
+  data = _.extend(data, { title: '', closeButton: false, message: _.template($('#modal-alert-template').html())(data) })
+  var modal = $(_.template($('#modal-template').html())(data))
+    .appendTo('body')
+    .modal(data)
+    .modal('show')
+    .on('hidden.bs.modal', function (data) {
+      data.currentTarget.remove()
+    })
+  return modal
+}
+
+function showToast(params) {
+  var data = _.extend(
+    { title: '', titleClasses: '', decor: '', closeButton: true, message: '', autohide: true },
+    params
+  )
+  var toast = $(_.template($('#toast-template').html())(data))
+    .appendTo('#toastHolder')
+    .toast({ autohide: data.autohide ? true : false })
+    .toast('show')
+    .on('hidden.bs.toast', function (data) {
+      data.currentTarget.remove()
+    })
+  return toast
+}
+
+function showToastError(params) {
+  var data = _.extend({ titleClasses: 'bg-danger text-white', error: '' }, params)
+  data.message =
+    data.message +
+    '<br/>Error code: <samp class="text-break">' +
+    data.error.code +
+    '</samp><br/>' +
+    'Error message: <samp class="text-break">' +
+    data.error.message +
+    '</samp><br/>'
+  return showToast(data)
 }
 
 const checkNetwork = async () => {
@@ -59,6 +102,16 @@ const checkNetwork = async () => {
 
   ethereum.on('chainChanged', onChainIdChanged)
   ethereum.on('accountsChanged', onAccountsChanged)
+  ethereum.on('message', onMessage)
+  ethereum
+    .request({ method: 'eth_subscribe', params: ['newHeads'] })
+    .then((result) => {
+      console.debug('sub', result)
+      subscriptions.newBlock = result
+    })
+    .catch((error) => {
+      console.error('subscribe', error)
+    })
 }
 
 const onClickInstall = () => {
@@ -81,37 +134,13 @@ const onClickConnect = async () => {
 const handleNewAccounts = async (newAccounts) => {
   $('.toast').remove()
   accounts = newAccounts
-  var account = accounts[0]
-  var bal = await ethereum.request({
-    method: 'eth_getBalance',
-    params: [account]
-  })
-  var accountDetail = $('#accountDetail')
-  accountDetail.prop('hidden', false)
-  accountDetail.find('#address').prop('innerText', account)
-  accountDetail.find('#balance').prop('innerText', formatEther(bal))
-  try {
-    var balARM = await ethereum.request({
-      method: 'eth_call',
-      params: [
-        {
-          to: armContractAddr,
-          data: '0x70a08231000000000000000000000000' + account.replace(/^0x/, '')
-        },
-        'latest'
-      ]
-    })
-    accountDetail.find('#balanceARM').prop('innerText', formatEther(balARM))
-  } catch (error) {
-    console.error(error)
-  }
-  if (onboarding) {
-    onboarding.stopOnboarding()
-  }
+  accountData.address = accounts[0]
+  reloadBalance()
   reloadValidators()
 }
 
 const onChainIdChanged = async (chainId) => {
+  networkData.chainId = chainId
   if (chainId != geneChainId) {
     $('#wrongNetwork').modal()
     return
@@ -119,6 +148,15 @@ const onChainIdChanged = async (chainId) => {
   $('#wrongNetwork').modal('hide')
 
   accounts = await ethereum.request({ method: 'eth_requestAccounts' })
+  ethereum
+    .request({ method: 'eth_getBlockByNumber', params: ['latest', false] })
+    .then((result) => {
+      console.debug('latest block', result)
+      networkData.lastBlock = result
+    })
+    .catch((error) => {
+      console.error('getBlock', error)
+    })
 
   const isMetaMaskConnected = () => accounts && accounts.length > 0
   console.debug(accounts)
@@ -132,6 +170,11 @@ const onChainIdChanged = async (chainId) => {
 
 const onAccountsChanged = async (accounts) => {
   handleNewAccounts(accounts)
+}
+
+const onMessage = async (message) => {
+  console.log('message', message)
+  if (message.data.subscription == subscriptions.newBlock) networkData.lastBlock = message.data.result
 }
 
 $('#addNetwork').on('click', async () => {
@@ -163,7 +206,9 @@ let CandidateView = Backbone.View.extend({
   render: function () {
     this.model.set('id', this.model.collection.indexOf(this.model) + 1)
     this.$el.html(this.template(this.model.toJSON()))
-    this.$el.find('#stake').on('click', this.model, stakeDialog.onStakeCliked)
+    this.$el.find('#stake').on('click', this.model, stakeDialog.show)
+    this.$el.find('#unstake').on('click', this.model, onUnstakeClicked)
+    this.$el.find('#settle').on('click', this.model, settleDialog.show)
     if (!this.model.get('staked')) this.$el.find('#unstake').remove()
     this.$el.find('[data-toggle="popover"]').popover({ trigger: 'focus' })
     this.$el.find('[data-toggle="tooltip"]').tooltip()
@@ -172,7 +217,7 @@ let CandidateView = Backbone.View.extend({
 })
 
 let CandidatesView = Backbone.View.extend({
-  el: $('#topCandidates > table'),
+  el: $('#topCandidates').find('table'),
   initialize: function () {
     this.listenTo(this.model, 'update', this.render)
     this.listenTo(this.model, 'reset', this.render)
@@ -197,7 +242,7 @@ let StakedCandidateView = CandidateView.extend({
 })
 
 let StakedCandidatesView = CandidatesView.extend({
-  el: $('#stakedCandidates > table'),
+  el: $('#stakedCandidates').find('table'),
 
   render: function () {
     var $tbody = this.$('tbody')
@@ -214,6 +259,9 @@ let StakedCandidatesView = CandidatesView.extend({
 })
 
 let Candidate = Backbone.Model.extend({
+  initialize: function () {
+    this.set('accountData', accountData)
+  },
   defaults: {
     ready: false,
     validator: '',
@@ -238,18 +286,7 @@ let Candidates = Backbone.Collection.extend({
 })
 
 let StakedCandidate = Candidate.extend({
-  defaults: {
-    ready: false,
-    validator: '',
-    active: false,
-    power: 0,
-    apy: 0,
-    rewardPerDay: 0,
-    stakerShare: 0,
-    stakePower: 0,
-    stakeRNA: 0,
-    stakeARM: 0,
-    profitValue: 0,
+  defaults: _.extend(Candidate.prototype.defaults, {
     staked: true,
     stakedRNA: 0,
     stakedARM: 0,
@@ -257,7 +294,7 @@ let StakedCandidate = Candidate.extend({
     bookAtValue: 0,
     lockBlock: 0,
     profit: 0
-  }
+  })
 })
 
 let StakedCandidates = Backbone.Collection.extend({
@@ -271,6 +308,53 @@ let top = new Candidates()
 new CandidatesView({ model: top }).render()
 let staked = new StakedCandidates()
 new StakedCandidatesView({ model: staked }).render()
+
+const reloadBalance = async () => {
+  var account = accountData.address
+  var accountDetail = $('#accountDetail')
+  accountDetail.prop('hidden', false)
+  accountDetail.find('#address').prop('innerText', account)
+  ethereum
+    .request({
+      method: 'eth_getBalance',
+      params: [account]
+    })
+    .then((bal) => {
+      accountData.balance = formatEther(bal)
+      accountDetail.find('#balance').prop('innerText', accountData.balance)
+    })
+  ethereum
+    .request({
+      method: 'eth_call',
+      params: [
+        {
+          to: armContractAddr,
+          data: '0x70a08231000000000000000000000000' + account.replace(/^0x/, '')
+        },
+        'latest'
+      ]
+    })
+    .then((balARM) => {
+      accountData.balanceARM = formatEther(balARM)
+      accountDetail.find('#balanceARM').prop('innerText', accountData.balanceARM)
+    })
+    .catch((error) => {
+      console.error('get arm balance', error)
+    })
+
+  var ethersProvider = new Web3Provider(window.ethereum, 'any')
+  var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider)
+  riboseContract
+    .getBookedProfit(account)
+    .then((profit) => {
+      accountData.profit = formatEther(profit)
+      accountDetail.find('#profit').prop('innerText', accountData.profit)
+      accountDetail.find('#withdrawProfit').off('click').on('click', onWithdrawClicked)
+    })
+    .catch((error) => {
+      console.error('getBookedProfit', error)
+    })
+}
 
 const reloadValidators = async () => {
   top.reset()
@@ -341,7 +425,7 @@ const reloadValidators = async () => {
       stakedARM: formatEther(info[1]),
       stakedPower: info[2],
       bookAtValue: info[3],
-      lockBlock: info[4]
+      lockBlock: parseInt(info[4])
     })
     var profit = await riboseContract.getStakerUnsettledProfit(candidate.get('validator'), accounts[0])
     candidate.set({ profit: formatEther(profit), ready: true })
@@ -363,7 +447,7 @@ const reloadValidators = async () => {
       continue
     }
     var info = await riboseContract.getCandidateStakeInfo(candidate.get('validator'))
-    console.debug('candidate info', info)
+    console.debug('candidate info', candidate.get('validator'), info)
     candidate.set({
       stakerShare: info[0],
       stakePower: info[1],
@@ -380,14 +464,20 @@ const reloadValidators = async () => {
 // Stake dialog
 var stakeDialog = {
   view: Backbone.View.extend({
-    el: '#stakeDialog',
+    tagName: 'div',
+    className: 'modal fade',
+    attributes: { tabindex: -1 },
     template: _.template($('#stake-template').html()),
 
     show: function () {
       this.$el.modal()
     },
+    close: function () {
+      this.$el.modal('hide')
+    },
 
     submit: async function (event) {
+      this.model.set('accountData', accountData)
       var form = this.$('form')
       var rna = 0,
         arm = 0
@@ -396,7 +486,7 @@ var stakeDialog = {
         if (form.find('#arm').val().length > 0) arm = parseEther(form.find('#arm').val())
       } catch (error) {
         console.error(error)
-        alertError('Unexpect Error', error.message)
+        alertError({ title: 'Unexpect Error', error: error })
         return
       }
       if (arm == 0) {
@@ -413,65 +503,54 @@ var stakeDialog = {
       var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider.getSigner())
       riboseContract
         .stake(this.model.get('validator'), arm, { value: rna })
-        .then((result) => {
-          console.debug(result)
-          var toast = $(
-            _.template($('#toast-template').html())({
-              title: 'Waiting for confirmation',
+        .then(
+          function (result) {
+            console.debug(result)
+            this.close()
+            var toast = showToast({
+              title: 'Stake',
               decor: '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>',
+              closeButton: false,
+              autohide: false,
               message: 'Transaction hash: <samp class="text-break">' + result.hash + '</samp>'
             })
-          )
-            .appendTo($('#toastHolder'))
-            .toast({ autohide: false })
-            .toast('show')
-            .on('hidden.bs.toast', function (data) {
-              data.currentTarget.remove()
-            })
-          $('#stakeDialog').modal('hide')
-
-          result
-            .wait()
-            .then((receipt) => {
-              console.debug(receipt)
-              $(
-                _.template($('#toast-template').html())({
-                  title: receipt.status == 1 ? 'Transaction suceeded' : 'Transaction Failed',
-                  decor:
-                    '<i class="bi ' +
-                    (receipt.status == 1 ? 'bi-check-circle-fill text-success' : 'bi-x-circle-fill text-danger') +
-                    '"></i>',
+            result
+              .wait()
+              .then((receipt) => {
+                console.debug(receipt)
+                showToast({
+                  title: receipt.status == 1 ? 'Stake succeeded' : 'Stake failed',
+                  titleClasses: receipt.status == 1 ? 'bg-success text-white' : 'bg-danger text-white',
+                  closeButton: receipt.status != 1,
+                  autohide: receipt.status == 1,
                   message: 'Transaction hash: <samp class="text-break">' + receipt.transactionHash + '</samp>'
                 })
-              )
-                .appendTo($('#toastHolder'))
-                .toast('show')
-                .on('hidden.bs.toast', function (data) {
-                  data.currentTarget.remove()
+                if (receipt.status == 1) {
+                  reloadBalance()
+                  reloadValidators()
+                }
+              })
+              .catch((error) => {
+                console.error(error)
+                showToastError({
+                  title: 'Stake failed',
+                  titleClasses: 'bg-danger text-white',
+                  autohide: false,
+                  message: 'Transaction hash: <samp class="text-break">' + result.hash + '</samp>',
+                  error: error
                 })
-            })
-            .catch((error) => {
-              console.error(error)
-              $(
-                _.template($('#toast-template').html())({
-                  title: 'Transaction Failed',
-                  decor: '<i class="bi bi-x-circle text-danger"></i>',
-                  message: 'Transaction hash: <samp class="text-break">' + receipt.transactionHash + '</samp>'
-                })
-              )
-                .appendTo($('#toastHolder'))
-                .toast('show')
-                .on('hidden.bs.toast', function (data) {
-                  data.currentTarget.remove()
-                })
-            })
-            .finally(function () {
-              toast.remove()
-            })
-        })
+              })
+              .finally(function () {
+                toast.toast('hide')
+              })
+          }.bind(this)
+        )
         .catch((error) => {
           console.error(error)
-          alertError(JSON.stringify(error, Object.getOwnPropertyNames(error)))
+          alertError({
+            title: 'Stake failed',
+            error: error
+          })
         })
         .finally(
           function () {
@@ -481,15 +560,305 @@ var stakeDialog = {
     },
 
     render: function () {
-      this.$('form').html(this.template(this.model.toJSON()))
-      this.$('#confirm').off('click')
+      this.$el.html(this.template(this.model.toJSON()))
+      this.$el.on('hidden.bs.modal', function (event) {
+        event.currentTarget.remove()
+      })
       this.$('#confirm').on('click', this.submit.bind(this))
+      this.$el.appendTo('body')
       return this
     }
   }),
 
-  onStakeCliked: function (event) {
+  show: function (event) {
     var candidate = event.data
     new stakeDialog.view({ model: candidate }).render().show()
   }
+}
+
+function onUnstakeClicked(event) {
+  var model = event.data
+  console.log(model)
+  model.set('lastBlock', networkData.lastBlock)
+  var message = _.template($('#unstake-template').html())(model.toJSON())
+  var data = {
+    title: 'Unstake from candidate',
+    titleClasses: '',
+    closeButton: true,
+    buttons: [
+      {
+        id: 'confirm',
+        text: '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" hidden></span>Unstake',
+        classNames: 'btn-primary'
+      }
+    ],
+    message: message,
+    bodyClasses: ''
+  }
+
+  var modal = $(_.template($('#modal-template').html())(data))
+    .appendTo('body')
+    .modal(data)
+    .modal('show')
+    .on('hidden.bs.modal', function (data) {
+      data.currentTarget.remove()
+    })
+  modal.find('#confirm').on('click', function () {
+    var form = modal.find('form')
+    var rna = 0,
+      arm = 0
+    try {
+      if (form.find('#rna').val().length > 0) rna = parseEther(form.find('#rna').val())
+      if (form.find('#arm').val().length > 0) arm = parseEther(form.find('#arm').val())
+    } catch (error) {
+      console.error(error)
+      alertError({ title: 'Unexpect Error', error: error })
+      return
+    }
+    if (arm == 0 && rna == 0) {
+      alertError('RNA and ARM can not be both 0')
+      return
+    }
+
+    modal.find('#confirm').prop('disabled', true).find('.spinner-border').prop('hidden', false)
+    var ethersProvider = new Web3Provider(window.ethereum, 'any')
+    var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider.getSigner())
+    riboseContract
+      .unstake(model.get('validator'), rna, arm)
+      .then(
+        function (result) {
+          console.debug(result)
+          this.close()
+          var toast = showToast({
+            title: 'Unstake',
+            decor: '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>',
+            closeButton: false,
+            autohide: false,
+            message: 'Transaction hash: <samp class="text-break">' + result.hash + '</samp>'
+          })
+          result
+            .wait()
+            .then((receipt) => {
+              console.debug(receipt)
+              showToast({
+                title: 'Unstake ' + (receipt.status == 1 ? 'succeeded' : 'failed'),
+                titleClasses: receipt.status == 1 ? 'bg-success text-white' : 'bg-danger text-white',
+                closeButton: receipt.status != 1,
+                autohide: receipt.status == 1,
+                message: 'Transaction hash: <samp class="text-break">' + receipt.transactionHash + '</samp>'
+              })
+              if (receipt.status == 1) {
+                reloadBalance()
+                reloadValidators()
+              }
+            })
+            .catch((error) => {
+              console.error(error)
+              showToastError({
+                title: 'Unstake failed',
+                titleClasses: 'bg-danger text-white',
+                autohide: false,
+                message: 'Transaction hash: <samp class="text-break">' + result.hash + '</samp>',
+                error: error
+              })
+            })
+            .finally(function () {
+              toast.toast('hide')
+            })
+        }.bind(this)
+      )
+      .catch((error) => {
+        console.error(error)
+        alertError({
+          title: 'Unstake failed',
+          error: error
+        })
+      })
+      .finally(function () {
+        modal.find('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+      })
+  })
+}
+
+// Settle dialog
+var settleDialog = {
+  view: Backbone.View.extend({
+    tagName: 'div',
+    className: 'modal fade',
+    attributes: { tabindex: -1 },
+    template: _.template($('#settle-template').html()),
+
+    show: function () {
+      this.$el.modal()
+    },
+    close: function () {
+      this.$el.modal('hide')
+    },
+
+    submit: async function (event) {
+      this.$('#confirm').prop('disabled', true).find('.spinner-border').prop('hidden', false)
+      var ethersProvider = new Web3Provider(window.ethereum, 'any')
+      var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider.getSigner())
+      riboseContract
+        .settleStakerProfit(this.model.get('validator'))
+        .then((result) => {
+          console.debug(result)
+          var toast = showToast({
+            title: 'Settle reward',
+            decor: '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>',
+            closeButton: false,
+            autohide: false,
+            message: 'Transaction hash: <samp class="text-break">' + result.hash + '</samp>'
+          })
+          this.close()
+
+          result
+            .wait()
+            .then((receipt) => {
+              console.debug(receipt)
+              showToast({
+                title: 'Settle reward ' + (receipt.status == 1 ? 'succeeded' : 'failed'),
+                titleClasses: receipt.status == 1 ? 'bg-success text-white' : 'bg-danger text-white',
+                closeButton: receipt.status != 1,
+                autohide: receipt.status == 1,
+                message: 'Transaction hash: <samp class="text-break">' + receipt.transactionHash + '</samp>',
+                autohide: true
+              })
+              if (receipt.status == 1) {
+                reloadBalance()
+                reloadValidators()
+              }
+            })
+            .catch((error) => {
+              console.error(error)
+              showToastError({
+                title: 'Settle reward failed',
+                titleClasses: 'bg-danger text-white',
+                autohide: false,
+                message: 'Transaction hash: <samp class="text-break">' + receipt.transactionHash + '</samp>',
+                error: error
+              })
+            })
+            .finally(function () {
+              toast.toast('hide')
+            })
+        })
+        .catch((error) => {
+          console.error(error)
+          alertError({
+            title: 'Settle failed',
+            error: error
+          })
+        })
+        .finally(
+          function () {
+            this.$('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+          }.bind(this)
+        )
+    },
+
+    render: function () {
+      this.$el.html(this.template(this.model.toJSON()))
+      this.$el.on('hidden.bs.modal', function (event) {
+        event.currentTarget.remove()
+      })
+      this.$('#confirm').on('click', this.submit.bind(this))
+      this.$el.appendTo('body')
+      return this
+    }
+  }),
+
+  show: function (event) {
+    var candidate = event.data
+    new settleDialog.view({ model: candidate }).render().show()
+  }
+}
+
+function onWithdrawClicked(event) {
+  var data = {
+    title: 'Withdraw Profit',
+    titleClasses: '',
+    closeButton: true,
+    buttons: [
+      {
+        id: 'withdraw',
+        text: '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" hidden></span>Withdraw',
+        classNames: 'btn-primary'
+      }
+    ],
+    message:
+      '<p>Estimate profit to withdraw:<br/><samp>' +
+      accountData.profit +
+      '</samp><small class="text-muted">RNA</small></p><small class="text-muted">' +
+      'Please note: All settled reward will be withdrawed.' +
+      '</small>',
+    bodyClasses: ''
+  }
+
+  var modal = $(_.template($('#modal-template').html())(data))
+    .appendTo('body')
+    .modal(data)
+    .modal('show')
+    .on('hidden.bs.modal', function (data) {
+      data.currentTarget.remove()
+    })
+  modal.find('#withdraw').on('click', function () {
+    modal.find('#withdraw').prop('disabled', true).find('.spinner-border').prop('hidden', false)
+    var ethersProvider = new Web3Provider(window.ethereum, 'any')
+    var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider.getSigner())
+    riboseContract
+      .withdrawStakerProfits(accountData.address)
+      .then((result) => {
+        console.debug(result)
+        var toast = showToast({
+          title: 'Withdraw profit',
+          decor: '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>',
+          closeButton: false,
+          autohide: false,
+          message: 'Transaction hash: <samp class="text-break">' + result.hash + '</samp>'
+        })
+        modal.modal('hide')
+
+        result
+          .wait()
+          .then((receipt) => {
+            console.debug(receipt)
+            showToast({
+              title: 'Withdraw profit ' + (receipt.status == 1 ? 'succeeded' : 'failed'),
+              titleClasses: receipt.status == 1 ? 'bg-success text-white' : 'bg-danger text-white',
+              closeButton: receipt.status != 1,
+              autohide: receipt.status == 1,
+              message: 'Transaction hash: <samp class="text-break">' + receipt.transactionHash + '</samp>',
+              autohide: true
+            })
+            if (receipt.status == 1) {
+              reloadBalance()
+              reloadValidators()
+            }
+          })
+          .catch((error) => {
+            console.error(error)
+            showToastError({
+              title: 'Withdraw reward failed',
+              titleClasses: 'bg-danger text-white',
+              autohide: false,
+              message: 'Transaction hash: <samp class="text-break">' + receipt.transactionHash + '</samp>',
+              error: error
+            })
+          })
+          .finally(function () {
+            toast.toast('hide')
+          })
+      })
+      .catch((error) => {
+        console.error(error)
+        alertError({
+          title: 'Withdraw failed',
+          error: error
+        })
+      })
+      .finally(function () {
+        modal.find('#withdraw').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+      })
+  })
 }

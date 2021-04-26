@@ -30,7 +30,6 @@
     "@metamask/eslint-config": "^4.0.0",
     "@metamask/onboarding": "^1.0.0",
     "backbone": "^1.4.0",
-    "bootbox": "^5.5.2",
     "bootstrap": "^4.6.0",
     "clean-webpack-plugin": "^3.0.0",
     "copy-webpack-plugin": "^6.0.2",
