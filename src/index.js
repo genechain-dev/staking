@@ -5,7 +5,7 @@ import bootbox from 'bootbox'
 import 'backbone'
 import _ from 'underscore'
 import MetaMaskOnboarding from '@metamask/onboarding'
-import { riboseContractAddr, riboseAbi } from './constants.json'
+import { armContractAddr, riboseContractAddr, riboseAbi } from './constants.json'
 import { Web3Provider } from '@ethersproject/providers'
 import { Contract } from '@ethersproject/contracts'
 import { formatEther, parseEther } from '@ethersproject/units'
@@ -88,19 +88,23 @@ const handleNewAccounts = async (newAccounts) => {
   })
   var accountDetail = $('#accountDetail')
   accountDetail.prop('hidden', false)
-  accountDetail.find('#address').prop('innerText', account.substr(0, 6) + '...' + account.substr(account.length - 4, 4))
+  accountDetail.find('#address').prop('innerText', account)
   accountDetail.find('#balance').prop('innerText', formatEther(bal))
-  // @todo check profitBook
-  // console.log(keccak256)
-  // console.log('0x' + keccak256("profitBook").substring(0, 8) + account)
-  // var profit = await ethereum.request({
-  //     method: 'eth_call',
-  //     params: [{
-  //         to: riboseContractAddr,
-  //         data: '0x' + keccak256("profitBook").substring(0, 8) + account
-  //     }, "latest"]
-  // })
-  // accountDetail.find("#profit").prop("innerText", formatEther(profit))
+  try {
+    var balARM = await ethereum.request({
+      method: 'eth_call',
+      params: [
+        {
+          to: armContractAddr,
+          data: '0x70a08231000000000000000000000000' + account.replace(/^0x/, '')
+        },
+        'latest'
+      ]
+    })
+    accountDetail.find('#balanceARM').prop('innerText', formatEther(balARM))
+  } catch (error) {
+    console.error(error)
+  }
   if (onboarding) {
     onboarding.stopOnboarding()
   }

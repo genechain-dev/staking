@@ -24,7 +24,7 @@
         <div class="col-sm-6 col-lg-4 col-xl-3 order-xl-9">
           <div class="card">
             <div class="card-body">
-              <h4 class="card-title">Account Info</h4>
+              <h4 class="card-title">Current Account</h4>
               <button class="btn btn-primary btn-lg btn-block" id="connectButton" hidden>
                 Click here to connect your wallet
               </button>
@@ -32,10 +32,14 @@
                 Click here to install MetaMask
               </button>
               <div id="accountDetail" hidden>
+                Address:
+                <div class="ml-2"><samp id="address" class="small">-</samp></div>
                 <p>
-                  Address: <label id="address">-</label><br />
-                  Balance: <label id="balance">-</label> <small class="text-muted">RNA</small><br />
-                  Profit: <label id="profit">-</label> <small class="text-muted">RNA</small>
+                  Balance:<br />
+                  <span class="small">
+                    <samp class="text-muted">- RNA: </samp><span id="balance">-</span><br />
+                    <samp class="text-muted">- ARM: </samp><span id="balanceARM">-</span><br />
+                  </span>
                 </p>
               </div>
             </div>
