@@ -34,7 +34,7 @@ module.exports = {
           flatten: true,
           from: './src/*',
           globOptions: {
-            ignore: ['**/*.js']
+            ignore: ['**/*.js', '**/*.json']
           }
         }
       ]

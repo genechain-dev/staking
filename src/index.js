@@ -27,7 +27,7 @@ let accountData = { address: '', balance: 0, balanceARM: 0, profit: 0 }
 let networkData = { chainId: 0, lastBlock: 0 }
 let subscriptions = { newBlock: 0 }
 
-const initialize = async () => {
+const initialize = () => {
   try {
     onboarding = new MetaMaskOnboarding({ forwarderOrigin })
   } catch (error) {
@@ -37,7 +37,7 @@ const initialize = async () => {
 }
 window.addEventListener('DOMContentLoaded', initialize)
 
-function alertError(params) {
+function alertModal(params) {
   var data = _.extend(
     {
       title: '',
@@ -45,22 +45,29 @@ function alertError(params) {
       closeButton: true,
       buttons: '',
       message: '',
-      bodyClasses: 'alert alert-danger m-0',
-      error: ''
+      bodyClasses: '',
+      footClasses: ''
     },
     typeof params === 'string' || params instanceof String ? { message: params } : params
   )
-  if (data.error && data.error.data)
-    data.error.details = JSON.stringify(data.error.data, Object.getOwnPropertyNames(data.error.data))
-  data = _.extend(data, { title: '', closeButton: false, message: _.template($('#modal-alert-template').html())(data) })
-  var modal = $(_.template($('#modal-template').html())(data))
+  return $(_.template($('#modal-template').html())(data))
     .appendTo('body')
     .modal(data)
     .modal('show')
     .on('hidden.bs.modal', function (data) {
       data.currentTarget.remove()
     })
-  return modal
+}
+
+function alertError(params) {
+  var data = _.extend(
+    { message: '', error: '' },
+    typeof params === 'string' || params instanceof String ? { title: 'Error', message: params } : params
+  )
+  if (data.error && data.error.data)
+    data.error.details = JSON.stringify(data.error.data, Object.getOwnPropertyNames(data.error.data))
+  _.extend(data, { message: _.template($('#modal-alert-template').html())(data) })
+  return alertModal(data)
 }
 
 function showToast(params) {
@@ -79,7 +86,7 @@ function showToast(params) {
 }
 
 function showToastError(params) {
-  var data = _.extend({ titleClasses: 'bg-danger text-white', error: '' }, params)
+  var data = _.extend({ message: '', titleClasses: 'bg-danger text-white', error: '' }, params)
   data.message =
     data.message +
     '<br/>Error code: <samp class="text-break">' +
@@ -101,16 +108,52 @@ const checkNetwork = async () => {
   onChainIdChanged(chainId)
 
   ethereum.on('chainChanged', onChainIdChanged)
-  ethereum.on('accountsChanged', onAccountsChanged)
-  ethereum.on('message', onMessage)
+}
+
+function checkAccounts() {
+  console.warn('checkaccounts')
+  $('#connectButton').prop({ hidden: false, disabled: true }).find('.spinner-border').prop('hidden', false)
+  $('#accountDetails').prop('hidden', true)
+  var dialog = alertModal({
+    title: 'Connecting to your wallet',
+    closeButton: false,
+    backdrop: 'static',
+    message: 'If MetaMask does not prompt, please open it manually to complete connection.'
+  })
   ethereum
-    .request({ method: 'eth_subscribe', params: ['newHeads'] })
+    .request({ method: 'eth_requestAccounts' })
     .then((result) => {
-      console.debug('sub', result)
-      subscriptions.newBlock = result
+      console.debug('eth_requestAccounts', result)
+      accounts = result
+
+      const isMetaMaskConnected = () => accounts && accounts.length > 0
+
+      if (isMetaMaskConnected()) {
+        onAccountsChanged(accounts)
+        ethereum.on('accountsChanged', onAccountsChanged)
+      } else {
+        $('#connectButton').prop('hidden', false).prop('disabled', false)
+      }
     })
     .catch((error) => {
-      console.error('subscribe', error)
+      var data = {
+        title: 'Connection failed',
+        closeButton: false,
+        error: error,
+        buttons: [{ id: 'retry', classNames: 'btn-primary', text: 'Retry' }]
+      }
+      if (error.code == -32002)
+        _.extend(data, {
+          title: 'Can not open metamask',
+          backdrop: 'static',
+          message: 'Please open MetaMask manually to make sure no operation is in progress and then click Retry.'
+        })
+      var errDialog = alertError(data)
+      errDialog.find('#retry').on('click', errDialog.modal.bind(errDialog, 'hide')).on('click', onClickConnect)
+      $('#connectButton').off('click').on('click', onClickConnect).prop('hidden', false).prop('disabled', false)
+    })
+    .finally(function () {
+      dialog.removeClass('fade').on('shown.bs.modal', dialog.modal.bind(dialog, 'hide')).modal('hide')
     })
 }
 
@@ -120,23 +163,45 @@ const onClickInstall = () => {
 }
 
 const onClickConnect = async () => {
-  try {
-    $('#connectButton').prop('innerText', 'Waiting for connect').prop('disabled', true)
-    const newAccounts = await ethereum.request({
-      method: 'eth_requestAccounts'
-    })
-    handleNewAccounts(newAccounts)
-  } catch (error) {
-    console.error(error)
-  }
+  checkAccounts()
 }
 
-const handleNewAccounts = async (newAccounts) => {
-  $('.toast').remove()
+const onAccountsChanged = async (newAccounts) => {
   accounts = newAccounts
-  accountData.address = accounts[0]
-  reloadBalance()
-  reloadValidators()
+
+  const isMetaMaskConnected = () => accounts && accounts.length > 0
+
+  if (isMetaMaskConnected()) {
+    $('#connectButton').prop('hidden', true)
+    $('.toast').remove()
+    accountData.address = accounts[0]
+
+    reloadBalance()
+    reloadValidators()
+
+    ethereum
+      .request({ method: 'eth_getBlockByNumber', params: ['latest', false] })
+      .then((result) => {
+        console.debug('latest block', result)
+        networkData.lastBlock = result
+      })
+      .catch((error) => {
+        console.error('getBlock', error)
+      })
+
+    ethereum
+      .request({ method: 'eth_subscribe', params: ['newHeads'] })
+      .then((result) => {
+        console.debug('subscribe', result)
+        subscriptions.newBlock = result
+        ethereum.on('message', onMessage)
+      })
+      .catch((error) => {
+        console.error('subscribe', error)
+      })
+  } else {
+    $('#connectButton').prop('hidden', false).prop('disabled', false)
+  }
 }
 
 const onChainIdChanged = async (chainId) => {
@@ -147,39 +212,16 @@ const onChainIdChanged = async (chainId) => {
   }
   $('#wrongNetwork').modal('hide')
 
-  accounts = await ethereum.request({ method: 'eth_requestAccounts' })
-  ethereum
-    .request({ method: 'eth_getBlockByNumber', params: ['latest', false] })
-    .then((result) => {
-      console.debug('latest block', result)
-      networkData.lastBlock = result
-    })
-    .catch((error) => {
-      console.error('getBlock', error)
-    })
-
-  const isMetaMaskConnected = () => accounts && accounts.length > 0
-  console.debug(accounts)
-
-  if (isMetaMaskConnected()) {
-    handleNewAccounts(accounts)
-  } else {
-    $('#connectButton').on('click', onClickConnect).prop('hidden', false)
-  }
-}
-
-const onAccountsChanged = async (accounts) => {
-  handleNewAccounts(accounts)
+  checkAccounts()
 }
 
 const onMessage = async (message) => {
-  console.log('message', message)
+  console.debug('message', message)
   if (message.data.subscription == subscriptions.newBlock) networkData.lastBlock = message.data.result
 }
 
-$('#addNetwork').on('click', async () => {
-  console.log(1)
-  await ethereum.request({
+$('#addNetwork').on('click', () => {
+  ethereum.request({
     method: 'wallet_addEthereumChain',
     params: [
       {
@@ -286,7 +328,7 @@ let Candidates = Backbone.Collection.extend({
 })
 
 let StakedCandidate = Candidate.extend({
-  defaults: _.extend(Candidate.prototype.defaults, {
+  defaults: _.extend(_.clone(Candidate.prototype.defaults), {
     staked: true,
     stakedRNA: 0,
     stakedARM: 0,
@@ -349,9 +391,11 @@ const reloadBalance = async () => {
     .then((profit) => {
       accountData.profit = formatEther(profit)
       accountDetail.find('#profit').prop('innerText', accountData.profit)
-      accountDetail.find('#withdrawProfit').off('click').on('click', onWithdrawClicked)
+      accountDetail.find('#withdrawProfit').off('click').on('click', onWithdrawClicked).prop('hidden', false)
     })
     .catch((error) => {
+      accountDetail.find('#profit').prop('innerText', 0)
+      accountDetail.find('#withdrawProfit').prop('hidden', true)
       console.error('getBookedProfit', error)
     })
 }
@@ -369,12 +413,7 @@ const reloadValidators = async () => {
   console.debug('staked candidates', stakedCandidates)
   if (stakedCandidates.length > 0) {
     stakedCandidates.forEach(function (addr, index) {
-      staked.add(
-        new StakedCandidate({
-          validator: addr,
-          staked: true
-        })
-      )
+      staked.add(new StakedCandidate({ validator: addr }))
     })
     $('#stakedCandidates').find('.spinner-border').prop('hidden', true)
   }
@@ -394,7 +433,6 @@ const reloadValidators = async () => {
       if (s) s.set({ power: topCandidates[1][index] })
     }
   })
-  // top.sort()
   $('#topCandidates').find('.spinner-border').prop('hidden', true)
 
   var validators = await riboseContract.getValidators()
@@ -578,13 +616,9 @@ var stakeDialog = {
 
 function onUnstakeClicked(event) {
   var model = event.data
-  console.log(model)
   model.set('lastBlock', networkData.lastBlock)
-  var message = _.template($('#unstake-template').html())(model.toJSON())
   var data = {
     title: 'Unstake from candidate',
-    titleClasses: '',
-    closeButton: true,
     buttons: [
       {
         id: 'confirm',
@@ -592,17 +626,9 @@ function onUnstakeClicked(event) {
         classNames: 'btn-primary'
       }
     ],
-    message: message,
-    bodyClasses: ''
+    message: _.template($('#unstake-template').html())(model.toJSON())
   }
-
-  var modal = $(_.template($('#modal-template').html())(data))
-    .appendTo('body')
-    .modal(data)
-    .modal('show')
-    .on('hidden.bs.modal', function (data) {
-      data.currentTarget.remove()
-    })
+  var modal = alertModal(data)
   modal.find('#confirm').on('click', function () {
     var form = modal.find('form')
     var rna = 0,
@@ -627,8 +653,7 @@ function onUnstakeClicked(event) {
       .unstake(model.get('validator'), rna, arm)
       .then(
         function (result) {
-          console.debug(result)
-          this.close()
+          modal.modal('hide')
           var toast = showToast({
             title: 'Unstake',
             decor: '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>',
