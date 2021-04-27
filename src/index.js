@@ -145,7 +145,6 @@ function checkAccounts() {
       if (error.code == -32002)
         _.extend(data, {
           title: 'Can not open metamask',
-          backdrop: 'static',
           message: 'Please open MetaMask manually to make sure no operation is in progress and then click Retry.'
         })
       var errDialog = alertError(data)
@@ -207,7 +206,7 @@ const onAccountsChanged = async (newAccounts) => {
 const onChainIdChanged = async (chainId) => {
   networkData.chainId = chainId
   if (chainId != geneChainId) {
-    $('#wrongNetwork').modal()
+    $('#wrongNetwork').modal().find('#addNetwork').on('click', addNetwork)
     return
   }
   $('#wrongNetwork').modal('hide')
@@ -220,20 +219,46 @@ const onMessage = async (message) => {
   if (message.data.subscription == subscriptions.newBlock) networkData.lastBlock = message.data.result
 }
 
-$('#addNetwork').on('click', () => {
-  ethereum.request({
-    method: 'wallet_addEthereumChain',
-    params: [
-      {
-        chainId: '0x' + geneChainId.toString(16),
-        chainName: 'GeneChain Adenine Testnet',
-        nativeCurrency: { name: 'RNA', symbol: 'RNA', decimals: 18 },
-        rpcUrls: ['https://rpc-testnet.genechain.io'],
-        blockExplorerUrls: ['https://scan-testnet.genechain.io/']
-      }
-    ]
+function addNetwork() {
+  $('#wrongNetwork').modal('hide')
+  var dialog = alertModal({
+    title: 'Configuring network',
+    closeButton: false,
+    backdrop: 'static',
+    message: 'If MetaMask does not prompt, please open it manually to complete configuration.'
   })
-})
+  ethereum
+    .request({
+      method: 'wallet_addEthereumChain',
+      params: [
+        {
+          chainId: '0x' + geneChainId.toString(16),
+          chainName: 'GeneChain Adenine Testnet',
+          nativeCurrency: { name: 'RNA', symbol: 'RNA', decimals: 18 },
+          rpcUrls: ['https://rpc-testnet.genechain.io'],
+          blockExplorerUrls: ['https://scan-testnet.genechain.io/']
+        }
+      ]
+    })
+    .catch((error) => {
+      var data = {
+        title: 'Network configuration failed',
+        closeButton: false,
+        error: error,
+        buttons: [{ id: 'retry', classNames: 'btn-primary', text: 'Retry' }]
+      }
+      if (error.code == -32002)
+        _.extend(data, {
+          title: 'Can not open metamask',
+          message: 'Please open MetaMask manually to make sure no operation is in progress and then click Retry.'
+        })
+      var errDialog = alertError(data)
+      errDialog.find('#retry').on('click', errDialog.modal.bind(errDialog, 'hide')).on('click', addNetwork)
+    })
+    .finally(() => {
+      dialog.removeClass('fade').on('shown.bs.modal', dialog.modal.bind(dialog, 'hide')).modal('hide')
+    })
+}
 
 // validator list
 let CandidateView = Backbone.View.extend({
