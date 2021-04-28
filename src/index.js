@@ -534,6 +534,7 @@ const reloadValidators = async () => {
         lockBlock: parseInt(info[4]),
         stakerShare: candidate.get('stakerShare'),
         stakePower: candidate.get('stakePower'),
+        power: candidate.get('stakePower'),
         stakeRNA: candidate.get('stakeRNA'),
         stakeARM: candidate.get('stakeARM'),
         profitValue: candidate.get('profitValue'),
