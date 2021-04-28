@@ -521,6 +521,32 @@ const reloadValidators = async () => {
       apy: (rewardPerYear * 100) / validators.length / (info[2] == 0 ? 1 : info[2].div(WeiPerEther)),
       ready: true
     })
+    var info = await riboseContract.getStakingInfo(candidate.get('validator'), accounts[0])
+    if (info[0] > 0) {
+      // a temporary bug for candidate not added to staked when stake again after unstaking
+      $('#stakedCandidates').prop('hidden', false)
+      var c = new StakedCandidate({
+        validator: candidate.get('validator'),
+        stakedRNA: formatEther(info[0]),
+        stakedARM: formatEther(info[1]),
+        stakedPower: info[2],
+        bookAtValue: info[3],
+        lockBlock: parseInt(info[4]),
+        stakerShare: candidate.get('stakerShare'),
+        stakePower: candidate.get('stakePower'),
+        stakeRNA: candidate.get('stakeRNA'),
+        stakeARM: candidate.get('stakeARM'),
+        profitValue: candidate.get('profitValue'),
+        rewardPerDay: candidate.get('rewardPerDay'),
+        apy: candidate.get('apy'),
+        active: validators.indexOf(candidate.get('validator') >= 0)
+      })
+      staked.add(c)
+      var profit = await riboseContract.getStakerUnsettledProfit(candidate.get('validator'), accounts[0])
+      c.set({ profit: formatEther(profit), ready: true })
+
+      $('#stakedCandidates').find('.spinner-border').prop('hidden', true)
+    }
   }
 }
 
@@ -839,7 +865,7 @@ function onWithdrawClicked(event) {
       accountData.profit +
       '</samp><small class="text-muted">RNA</small></p><small class="text-muted">' +
       'Please note: All settled reward will be withdrawed.' +
-      '</small>',
+      '</small>'
   }
 
   var modal = alertModal(data)
