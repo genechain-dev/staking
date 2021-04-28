@@ -827,8 +827,6 @@ var settleDialog = {
 function onWithdrawClicked(event) {
   var data = {
     title: 'Withdraw Profit',
-    titleClasses: '',
-    closeButton: true,
     buttons: [
       {
         id: 'withdraw',
@@ -842,16 +840,9 @@ function onWithdrawClicked(event) {
       '</samp><small class="text-muted">RNA</small></p><small class="text-muted">' +
       'Please note: All settled reward will be withdrawed.' +
       '</small>',
-    bodyClasses: ''
   }
 
-  var modal = $(_.template($('#modal-template').html())(data))
-    .appendTo('body')
-    .modal(data)
-    .modal('show')
-    .on('hidden.bs.modal', function (data) {
-      data.currentTarget.remove()
-    })
+  var modal = alertModal(data)
   modal.find('#withdraw').on('click', function () {
     modal.find('#withdraw').prop('disabled', true).find('.spinner-border').prop('hidden', false)
     var ethersProvider = new Web3Provider(window.ethereum, 'any')
