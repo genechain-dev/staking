@@ -234,7 +234,8 @@ function addNetwork() {
         {
           chainId: '0x' + geneChainId.toString(16),
           chainName: 'GeneChain Adenine Testnet',
-          nativeCurrency: { name: 'RNA', symbol: 'RNA', decimals: 18 },
+          iconUrls: ['https://genechain.io/favicon.svg'],
+          nativeCurrency: { name: 'Testing RNA', symbol: 'tRNA', decimals: 18 },
           rpcUrls: ['https://rpc-testnet.genechain.io'],
           blockExplorerUrls: ['https://scan-testnet.genechain.io/']
         }
