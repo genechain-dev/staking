@@ -259,7 +259,7 @@
       </td>
       <td class="text-break">
           <%= ready?profit:'-' %>
-          <% if (profit!=0) { %>
+          <% if (ready&&profit!=0) { %>
               <button class="btn btn-sm btn-outline-primary" id="settle" data-toggle="tooltip" title="Click here to settle profit">Settle</button>
           <%}%>
       </td>

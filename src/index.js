@@ -16,7 +16,7 @@ const geneChainIds = [
   { id: 18080, name: 'Cytosine TESTNET' }
 ]
 const rewardPerBlock = 2
-const rewardShare = 0.8
+const rewardShare = 0.9
 const rewardPerDay = rewardPerBlock * rewardShare * 28800
 const rewardPerYear = rewardPerDay * 365
 
@@ -26,9 +26,10 @@ const forwarderOrigin = currentUrl.hostname === 'localhost' ? 'http://localhost:
 const { isMetaMaskInstalled } = MetaMaskOnboarding
 
 let onboarding
-let accounts
+let accounts // Connected accounts
+let validators // Active validators
 let accountData = { address: '', balance: NaN, balanceARM: NaN, balanceVBC: NaN, profit: NaN, formatEther: formatEther }
-let networkData = { chainId: 0, lastBlock: 0 }
+let networkData = { chainId: 0, lastBlock: 0 } //network data
 let subscriptions = { newBlock: 0 }
 
 const initialize = () => {
@@ -462,6 +463,114 @@ const reloadBalance = async () => {
     })
 }
 
+const reloadStakedCandidate = async (candidate) => {
+  var ethersProvider = new Web3Provider(window.ethereum, 'any')
+  var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider)
+  var info = await riboseContract.getCandidateStakeInfo(candidate.get('validator'))
+  console.debug('candidate info', candidate.get('validator'), info)
+  candidate.set({
+    stakerShare: info[0],
+    stakePower: info[1],
+    stakeRNA: formatEther(info[2]),
+    stakeARM: formatEther(info[3]),
+    profitValue: formatEther(info[4]),
+    rewardPerDay: rewardPerDay / validators.length,
+    apy: (rewardPerYear * 100) / validators.length / (info[2] == 0 ? 1 : info[2].div(WeiPerEther))
+  })
+  var info = await riboseContract.getStakingInfo(candidate.get('validator'), accountData.address)
+  console.debug('staker info', candidate.get('validator'), accounts[0], info)
+  candidate.set({
+    stakedRNA: formatEther(info[0]),
+    stakedARM: formatEther(info[1]),
+    stakedPower: info[2],
+    bookAtValue: info[3],
+    lockBlock: parseInt(info[4])
+  })
+  var profit = await riboseContract.getStakerUnsettledProfit(candidate.get('validator'), accountData.address)
+  candidate.set({ profit: formatEther(profit), ready: true })
+}
+
+const reloadTopCandidate = async (candidate) => {
+  var ethersProvider = new Web3Provider(window.ethereum, 'any')
+  var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider)
+  var s = staked.findWhere({ validator: candidate.get('validator') })
+  if (s) {
+    candidate.set({
+      stakerShare: s.get('stakerShare'),
+      stakePower: s.get('stakePower'),
+      stakeRNA: s.get('stakeRNA'),
+      stakeARM: s.get('stakeARM'),
+      profitValue: s.get('profitValue'),
+      rewardPerDay: s.get('rewardPerDay'),
+      apy: s.get('apy'),
+      ready: true
+    })
+    return
+  }
+  var info = await riboseContract.getCandidateStakeInfo(candidate.get('validator'))
+  console.debug('candidate info', candidate.get('validator'), info)
+  candidate.set({
+    stakerShare: info[0],
+    stakePower: info[1],
+    stakeRNA: formatEther(info[2]),
+    stakeARM: formatEther(info[3]),
+    profitValue: formatEther(info[4]),
+    rewardPerDay: rewardPerDay / validators.length,
+    apy: (rewardPerYear * 100) / validators.length / (info[2] == 0 ? 1 : info[2].div(WeiPerEther)),
+    ready: true
+  })
+  var info = await riboseContract.getStakingInfo(candidate.get('validator'), accountData.address)
+  if (info[0] > 0) {
+    // a temporary bug for candidate not added to staked when stake again after unstaking
+    $('#stakedCandidates').prop('hidden', false)
+    var c = new StakedCandidate({
+      validator: candidate.get('validator'),
+      stakedRNA: formatEther(info[0]),
+      stakedARM: formatEther(info[1]),
+      stakedPower: info[2],
+      bookAtValue: info[3],
+      lockBlock: parseInt(info[4]),
+      stakerShare: candidate.get('stakerShare'),
+      stakePower: candidate.get('stakePower'),
+      power: candidate.get('stakePower'),
+      stakeRNA: candidate.get('stakeRNA'),
+      stakeARM: candidate.get('stakeARM'),
+      profitValue: candidate.get('profitValue'),
+      rewardPerDay: candidate.get('rewardPerDay'),
+      apy: candidate.get('apy'),
+      active: validators.indexOf(candidate.get('validator') >= 0)
+    })
+    staked.add(c)
+    var profit = await riboseContract.getStakerUnsettledProfit(candidate.get('validator'), accounts[0])
+    c.set({ profit: formatEther(profit), ready: true })
+
+    $('#stakedCandidates').find('.spinner-border').prop('hidden', true)
+  }
+}
+
+const reloadCandidate = async (address) => {
+  var s = staked.findWhere({ validator: address })
+  var t = top.findWhere({ validator: address })
+  if (t) t.set({ ready: false })
+  if (s) {
+    s.set({ ready: false })
+  } else {
+    var ethersProvider = new Web3Provider(window.ethereum, 'any')
+    var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider)
+    var stakedCandidates = await riboseContract.getStakedCandidates(accounts[0])
+    console.debug('staked candidates', stakedCandidates)
+    if (stakedCandidates.length > 0 && stakedCandidates.indexOf(address) >= 0) {
+      s = staked.add(new StakedCandidate({ validator: address }))
+      if (t) {
+        t.set({ staked: true })
+        s.set({ power: t.get('power') })
+      }
+    }
+  }
+  if (s) await reloadStakedCandidate(s)
+  if (t) reloadTopCandidate(t)
+}
+
 const reloadValidators = async () => {
   top.reset()
   staked.reset()
@@ -471,6 +580,7 @@ const reloadValidators = async () => {
   var ethersProvider = new Web3Provider(window.ethereum, 'any')
   var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider)
 
+  // load staked candidates
   var stakedCandidates = await riboseContract.getStakedCandidates(accounts[0])
   console.debug('staked candidates', stakedCandidates)
   if (stakedCandidates.length > 0) {
@@ -481,23 +591,20 @@ const reloadValidators = async () => {
   }
   $('#stakedCandidates').prop('hidden', stakedCandidates.length == 0)
 
+  // load top candidates
   var topCandidates = await riboseContract.getTopCandidates()
   console.debug('top candidates', topCandidates)
   topCandidates[0].forEach(function (addr, index) {
-    var v = new Candidate({
-      validator: addr,
-      power: topCandidates[1][index]
-    })
-    top.add(v)
+    var t = top.add(new Candidate({ validator: addr, power: topCandidates[1][index] }))
     if (stakedCandidates.indexOf(addr) >= 0) {
-      v.set({ staked: true })
+      t.set({ staked: true })
       var s = staked.findWhere({ validator: addr })
       if (s) s.set({ power: topCandidates[1][index] })
     }
   })
   $('#topCandidates').find('.spinner-border').prop('hidden', true)
 
-  var validators = await riboseContract.getValidators()
+  validators = await riboseContract.getValidators()
   console.debug('validators', validators)
   validators.forEach((addr, index) => {
     var t = top.findWhere({ validator: addr })
@@ -506,86 +613,8 @@ const reloadValidators = async () => {
     if (s) s.set({ active: true })
   })
 
-  for (var candidate of staked) {
-    var info = await riboseContract.getCandidateStakeInfo(candidate.get('validator'))
-    console.debug('candidate info', candidate.get('validator'), info)
-    candidate.set({
-      stakerShare: info[0],
-      stakePower: info[1],
-      stakeRNA: formatEther(info[2]),
-      stakeARM: formatEther(info[3]),
-      profitValue: formatEther(info[4]),
-      rewardPerDay: rewardPerDay / validators.length,
-      apy: (rewardPerYear * 100) / validators.length / (info[2] == 0 ? 1 : info[2].div(WeiPerEther))
-    })
-    var info = await riboseContract.getStakingInfo(candidate.get('validator'), accounts[0])
-    console.debug('staker info', candidate.get('validator'), accounts[0], info)
-    candidate.set({
-      stakedRNA: formatEther(info[0]),
-      stakedARM: formatEther(info[1]),
-      stakedPower: info[2],
-      bookAtValue: info[3],
-      lockBlock: parseInt(info[4])
-    })
-    var profit = await riboseContract.getStakerUnsettledProfit(candidate.get('validator'), accounts[0])
-    candidate.set({ profit: formatEther(profit), ready: true })
-  }
-
-  for (var candidate of top) {
-    var s = staked.findWhere({ validator: candidate.get('validator') })
-    if (s) {
-      candidate.set({
-        stakerShare: s.get('stakerShare'),
-        stakePower: s.get('stakePower'),
-        stakeRNA: s.get('stakeRNA'),
-        stakeARM: s.get('stakeARM'),
-        profitValue: s.get('profitValue'),
-        rewardPerDay: s.get('rewardPerDay'),
-        apy: s.get('apy'),
-        ready: true
-      })
-      continue
-    }
-    var info = await riboseContract.getCandidateStakeInfo(candidate.get('validator'))
-    console.debug('candidate info', candidate.get('validator'), info)
-    candidate.set({
-      stakerShare: info[0],
-      stakePower: info[1],
-      stakeRNA: formatEther(info[2]),
-      stakeARM: formatEther(info[3]),
-      profitValue: formatEther(info[4]),
-      rewardPerDay: rewardPerDay / validators.length,
-      apy: (rewardPerYear * 100) / validators.length / (info[2] == 0 ? 1 : info[2].div(WeiPerEther)),
-      ready: true
-    })
-    var info = await riboseContract.getStakingInfo(candidate.get('validator'), accounts[0])
-    if (info[0] > 0) {
-      // a temporary bug for candidate not added to staked when stake again after unstaking
-      $('#stakedCandidates').prop('hidden', false)
-      var c = new StakedCandidate({
-        validator: candidate.get('validator'),
-        stakedRNA: formatEther(info[0]),
-        stakedARM: formatEther(info[1]),
-        stakedPower: info[2],
-        bookAtValue: info[3],
-        lockBlock: parseInt(info[4]),
-        stakerShare: candidate.get('stakerShare'),
-        stakePower: candidate.get('stakePower'),
-        power: candidate.get('stakePower'),
-        stakeRNA: candidate.get('stakeRNA'),
-        stakeARM: candidate.get('stakeARM'),
-        profitValue: candidate.get('profitValue'),
-        rewardPerDay: candidate.get('rewardPerDay'),
-        apy: candidate.get('apy'),
-        active: validators.indexOf(candidate.get('validator') >= 0)
-      })
-      staked.add(c)
-      var profit = await riboseContract.getStakerUnsettledProfit(candidate.get('validator'), accounts[0])
-      c.set({ profit: formatEther(profit), ready: true })
-
-      $('#stakedCandidates').find('.spinner-border').prop('hidden', true)
-    }
-  }
+  await Promise.all(staked.map(reloadStakedCandidate))
+  await Promise.all(top.map(reloadTopCandidate))
 }
 
 // Stake dialog
@@ -634,7 +663,7 @@ var stakeDialog = {
           showToastTransaction('Stake', result).then((receipt) => {
             if (receipt.status == 1) {
               reloadBalance()
-              reloadValidators()
+              reloadCandidate(this.model.get('validator'))
             }
           })
         })
@@ -704,7 +733,7 @@ function onUnstakeClicked(event) {
         showToastTransaction('Unstake', result).then((receipt) => {
           if (receipt.status == 1) {
             reloadBalance()
-            reloadValidators()
+            reloadCandidate(model.get('validator'))
           }
         })
       })
@@ -739,7 +768,8 @@ var settleDialog = {
           showToastTransaction('Settle reward', result).then((receipt) => {
             if (receipt.status == 1) {
               reloadBalance()
-              reloadValidators()
+              this.model.set({ ready: false })
+              reloadStakedCandidate(this.model)
             }
           })
         })
@@ -798,7 +828,6 @@ function onWithdrawClicked(event) {
         showToastTransaction('Withdraw profit', result).then((receipt) => {
           if (receipt.status == 1) {
             reloadBalance()
-            reloadValidators()
           }
         })
       })
@@ -858,7 +887,7 @@ function onExchangeARMClicked(event) {
     .SrcTokenAddr()
     .then((addr) => {
       if (!addr || addr == 0) {
-        alertError('VBC contract address not')
+        alertError('VBC contract address unavailable')
         return
       }
       vbcContract = new Contract(addr, vbcAbi, ethersProvider.getSigner())
