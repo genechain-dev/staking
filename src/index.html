@@ -49,8 +49,8 @@
                 <p>
                   <strong>Balance:</strong><br />
                   <span class="small">
-                    <samp class="text-muted">- RNA: </samp><span id="balance">-</span><br />
-                    <samp class="text-muted">- ARM: </samp><span id="balanceARM">-</span><br />
+                    <samp class="text-muted">- RNA: </samp><samp id="balance">-</samp><br />
+                    <samp class="text-muted">- ARM: </samp><samp id="balanceARM">-</samp><br />
                     <button id="exchangeARM" class="btn btn-outline-primary btn-sm">VBC&#8651;ARM</button><br />
                   </span>
                 </p>
@@ -219,7 +219,7 @@
               <% if (active) print('Yes'); else print('No')%>
           </span>
       </td>
-      <td class="text-break"><%= power==0?'-':power %></td>
+      <td class="text-break"><%= stakePower==0?'-':stakePower %></td>
       <td>
           <%= ready?stakeRNA:'-' %><small class="text-muted">RNA</small><br/>
           <%= ready?stakeARM:'-' %><small class="text-muted">ARM</small>
@@ -269,11 +269,11 @@
       </td>
       <td>
           <% if (apy>0) { %>
-          Power%: <%= (stakedPower*100/power).toFixed(2) %>%<br/>
+          Power%: <%= (stakedPower*100/stakePower).toFixed(2) %>%<br/>
               <% if (active) { %>
-                  Estimate daily reward: <%= (rewardPerDay*stakedPower/power).toFixed(2) %><small class="text-muted">RNA</small><br/>
+                  Estimate daily reward: <%= (rewardPerDay*stakedPower/stakePower).toFixed(2) %><small class="text-muted">RNA</small><br/>
                   APY: <%= apy.toFixed(2) %>%<br/>
-                  <button class="btn btn-link btn-sm p-0" data-toggle="popover" title="Details" data-html="true" data-content='Power weight: <%=(stakedPower*100/power).toFixed(2)%>%<br/><code class="small">(My Power / Total Power)</code><br/>Estimate daily reward: <%=(rewardPerDay*stakedPower/power).toFixed(2)%><small class="text-muted">RNA</small><br/><code class="small">(Candidate estimate daily reward * Power weight)</code><hr/>My Power: <%= stakedPower %><br/>Total Power: <%= power %><br/>Candidate estimate daily reward: <%=rewardPerDay.toFixed(2)%><small class="text-muted">RNA</small>''>More info</button>
+                  <button class="btn btn-link btn-sm p-0" data-toggle="popover" title="Details" data-html="true" data-content='Power weight: <%=(stakedPower*100/stakePower).toFixed(2)%>%<br/><code class="small">(My Power / Total Power)</code><br/>Estimate daily reward: <%=(rewardPerDay*stakedPower/stakePower).toFixed(2)%><small class="text-muted">RNA</small><br/><code class="small">(Candidate estimate daily reward * Power weight)</code><hr/>My Power: <%= stakedPower %><br/>Total Power: <%= stakePower %><br/>Candidate estimate daily reward: <%=rewardPerDay.toFixed(2)%><small class="text-muted">RNA</small>''>More info</button>
               <%}%>
           <%} else print('-')%>
       </td>
@@ -304,27 +304,40 @@
             <form>
               <div class="form-group row">
                 <label class="col-sm-12 col-form-label">Candidate address:</label>
-                <div class="col-sm-10"><samp><%= validator %></samp></div>
+                <div class="col-sm-10 small"><samp><%= validator %></samp></div>
               </div>
               <div class="form-group row no-gutters m-0">
-                  <label for="rna" class="col-sm-3 col-form-label">RNA to stake:</label>
-                  <div class="col-11 col-sm-2">
-                      <input id="rna" class="form-control" type="number" min="1" placeholder="0"/>
-                  </div>
-                  <label class="col-1 col-form-label text-muted">RNA</label>
-              </div>
-              <div class="form-group row no-gutters">
-                <label class="col-sm-9 offset-sm-3 small text-muted">Balance: <%=accountData.formatEther(accountData.balance)%><small class="text-muted"> RNA</small></label>
+                <label for="rna" class="col-sm-3 col-form-label">RNA to stake:</label>
+                <div class="col-11 col-sm-2">
+                    <input id="rna" class="form-control" type="number" min="1" placeholder="0"/>
+                </div>
+                <label class="col-1 col-form-label text-muted">RNA</label>
+                <label class="col-sm-9 offset-sm-3 small text-muted">
+                  Balance: <samp class="text-dark"><%=accountData.formatEther(accountData.balance)%></samp><small class="text-muted">RNA</small>
+                </label>
               </div>
               <div class="form-group row no-gutters m-0">
-                  <label for="arm" class="col-sm-3 col-form-label">ARM to stake:</label>
-                  <div class="col-11 col-sm-2">
-                      <input id="arm" class="form-control" type="number" min="0" placeholder="0"/>
+                <label for="arm" class="col-sm-3 col-form-label">ARM to stake:</label>
+                <div class="col-11 col-sm-2">
+                    <input id="arm" class="form-control" type="number" min="0" disabled placeholder="0"/>
+                </div>
+                <label class="col-1 col-form-label text-muted">ARM</label>
+                <label class="bg-light col-sm-9 offset-sm-3 small text-muted">
+                  Balance: <samp class="text-dark"><%=accountData.formatEther(accountData.balanceARM)%></samp><small class="text-muted">ARM</small>
+                  Remain Allowance:<samp class="text-dark" id="allowedARM">-</samp><small class="text-muted">ARM</small>
+                  <div class="input-group" id="approveDiv" hidden>
+                    <div class="input-group-prepend"><label for="approveARM" class="input-group-text col-form-label">Limit:</label></div>
+                    <input id="approveARM" class="form-control " type="number" min="0" value="1000" placeholder="0"/>
+                    <div class="input-group-append"><label class="input-group-text">ARM</label></div>
+                    <button id="approve" type="button" class="col-12 col-sm-4 ml-sm-1 btn btn-sm btn-primary">
+                      <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" hidden></span>
+                      Approve
+                    </button>
+                    <br/>
+                    <span>You need to approve an amount of ARM that can be transferred to Ribose system contract before staking.</span>
                   </div>
-                  <label class="col-1 col-form-label text-muted">ARM</label>
-              </div>
-              <div class="form-group row no-gutters">
-                <label class="col-sm-9 offset-sm-3 small text-muted">Balance: <%=accountData.formatEther(accountData.balanceARM)%><small class="text-muted"> ARM</small></label>
+
+                </label>
               </div>
               <small class="form-text text-muted">
                   You can stake at least 1 RNA or 3 ARMs or both.<br/>
@@ -347,7 +360,7 @@
       <form>
         <div class="form-group row">
           <label class="col-sm-12 col-form-label">Candidate address:</label>
-          <div class="col-sm-10"><%= validator %></samp></div>
+          <div class="col-sm-10 small"><samp><%= validator %></samp></div>
         </div>
         <div class="form-group row no-gutters m-0">
             <label for="rna" class="col-sm-4 col-form-label">RNA to unstake:</label>
@@ -406,12 +419,12 @@
     <script type="text/template" id="exchange-arm-template">
       <p>
         <span class="text-muted">Current Balance:</span>
-        <samp class="small" id="balanceARM"><%= formatEther(balanceARM) %></samp><small class="text-muted">ARM</small>
-        <samp class="small" id="balanceVBC"><span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span></samp><small class="text-muted">VBC</small><br/>
+        <samp class="small text-dark" id="balanceARM"><%= formatEther(balanceARM) %></samp><small class="text-muted">ARM</small>
+        <samp class="small text-dark" id="balanceVBC"><span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span></samp><small class="text-muted">VBC</small><br/>
         <span class="text-muted">Staked:</span>
-        <samp class="small" id="stakedVBC"><span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span></samp><small class="text-muted">VBC</small>
+        <samp class="small text-dark" id="stakedVBC"><span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span></samp><small class="text-muted">VBC</small>
         <span class="text-muted">Remain Allowance:</span>
-        <samp class="small" id="allowedVBC"><span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span></samp><small class="text-muted">VBC</small>
+        <samp class="small text-dark" id="allowedVBC"><span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span></samp><small class="text-muted">VBC</small>
       </p>
       <span id="approveSpinner" class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
       <div class="form-group row no-gutters m-0" id="approveDiv" hidden>
@@ -433,15 +446,15 @@
         <div class="col-11 col-sm-2">
           <input id="stakeVBC" class="form-control" type="number" min="0" placeholder="0"/>
         </div>
-        <label class="col-1 col-form-label text-muted">VBC</label>
+        <label class="col-1 col-form-label text-muted">ARM</label>
         <div class="btn-group col-12 col-sm-4" role="group">
           <button id="stake" type="button" class="btn btn-sm btn-outline-primary">
             <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" hidden></span>
-            Stake
+            Mint
           </button>
           <button id="unstake" type="button" class="btn btn-sm btn-outline-primary">
             <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" hidden></span>
-            Unstake
+            Burn
           </button>
         </div>
         <small class="col-12 text-muted">

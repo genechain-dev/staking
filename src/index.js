@@ -377,7 +377,6 @@ let Candidate = Backbone.Model.extend({
     ready: false,
     validator: '',
     active: false,
-    power: 0,
     apy: 0,
     rewardPerDay: 0,
     stakerShare: 0,
@@ -392,7 +391,7 @@ let Candidate = Backbone.Model.extend({
 let Candidates = Backbone.Collection.extend({
   model: Candidate,
   comparator: function (item) {
-    return -item.get('power')
+    return -item.get('stakePower')
   }
 })
 
@@ -411,7 +410,7 @@ let StakedCandidate = Candidate.extend({
 let StakedCandidates = Backbone.Collection.extend({
   model: StakedCandidate,
   comparator: function (item) {
-    return -item.get('power')
+    return -item.get('stakePower')
   }
 })
 
@@ -532,7 +531,6 @@ const reloadTopCandidate = async (candidate) => {
       lockBlock: parseInt(info[4]),
       stakerShare: candidate.get('stakerShare'),
       stakePower: candidate.get('stakePower'),
-      power: candidate.get('stakePower'),
       stakeRNA: candidate.get('stakeRNA'),
       stakeARM: candidate.get('stakeARM'),
       profitValue: candidate.get('profitValue'),
@@ -563,7 +561,7 @@ const reloadCandidate = async (address) => {
       s = staked.add(new StakedCandidate({ validator: address }))
       if (t) {
         t.set({ staked: true })
-        s.set({ power: t.get('power') })
+        s.set({ stakePower: t.get('stakePower') })
       }
     }
   }
@@ -595,11 +593,11 @@ const reloadValidators = async () => {
   var topCandidates = await riboseContract.getTopCandidates()
   console.debug('top candidates', topCandidates)
   topCandidates[0].forEach(function (addr, index) {
-    var t = top.add(new Candidate({ validator: addr, power: topCandidates[1][index] }))
+    var t = top.add(new Candidate({ validator: addr, stakePower: topCandidates[1][index] }))
     if (stakedCandidates.indexOf(addr) >= 0) {
       t.set({ staked: true })
       var s = staked.findWhere({ validator: addr })
-      if (s) s.set({ power: topCandidates[1][index] })
+      if (s) s.set({ stakePower: topCandidates[1][index] })
     }
   })
   $('#topCandidates').find('.spinner-border').prop('hidden', true)
@@ -624,12 +622,64 @@ var stakeDialog = {
     className: 'modal fade',
     attributes: { tabindex: -1 },
     template: _.template($('#stake-template').html()),
+    allowedARM: NaN,
 
     show: function () {
       this.$el.modal()
+      this.loadAllowrance()
+      return this
     },
     close: function () {
       this.$el.modal('hide')
+      return this
+    },
+    loadAllowrance: function () {
+      var ethersProvider = new Web3Provider(window.ethereum, 'any')
+      var armContract = new Contract(armContractAddr, armAbi, ethersProvider.getSigner())
+      return armContract
+        .allowance(accountData.address, riboseContractAddr)
+        .then((result) => {
+          this.allowedARM = result
+          this.$el.find('#allowedARM').prop('innerText', formatEther(result))
+          this.$el.find('#approveDiv').prop('hidden', !result.lt(parseEther('3')))
+          this.$el.find('#arm').prop('disabled', result.lt(parseEther('3')))
+          this.$el.find('#approve').off('click').on('click', this.approve.bind(this))
+          return result
+        })
+        .catch((error) => alertError({ title: 'Failed to get ARM allowance', error: error }))
+    },
+    approve: function () {
+      var val = 0
+      try {
+        if (this.$el.find('#approveARM').val().length > 0) val = parseEther(this.$el.find('#approveARM').val())
+      } catch (error) {
+        alertError({ title: 'Unexpect Error', error: error })
+        return
+      }
+      if (val == 0 || val.isZero()) {
+        alertError('ARM should be greater than 0')
+        return
+      }
+
+      this.$el.find('#approve').prop('disabled', true).find('.spinner-border').prop('hidden', false)
+
+      var ethersProvider = new Web3Provider(window.ethereum, 'any')
+      var armContract = new Contract(armContractAddr, armAbi, ethersProvider.getSigner())
+      armContract
+        .approve(riboseContractAddr, val)
+        .then((result) =>
+          showToastTransaction('Approve ARM', result).then((receipt) => {
+            if (receipt.status == 1) {
+              this.$el.find('#approve').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+              this.$el.find('#approveDiv').prop('hidden', true)
+              this.loadAllowrance()
+            }
+          })
+        )
+        .catch((error) => {
+          alertError({ title: 'Failed to set ARM allowance', error: error })
+          this.$el.find('#approve').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+        })
     },
 
     submit: async function (event) {
@@ -649,7 +699,7 @@ var stakeDialog = {
           alertError('You should stake at least 1 RNA or 3 ARMs')
           return
         }
-      } else if (arm < parseEther('3')) {
+      } else if (arm.lt(parseEther('3'))) {
         alertError('ARM should be at least 3')
         return
       }
@@ -752,9 +802,11 @@ var settleDialog = {
 
     show: function () {
       this.$el.modal()
+      return this
     },
     close: function () {
       this.$el.modal('hide')
+      return this
     },
 
     submit: async function (event) {
@@ -873,7 +925,7 @@ function onExchangeARMClicked(event) {
       .getExchangeInfo(accountData.address)
       .then((result) => {
         stakedVBC = result[1]
-        modal.find('#memo').prop('innerText', result[0])
+        modal.find('#memo').val(result[0])
         modal.find('#stakedVBC').prop('innerText', formatEther(result[1]))
         return result
       })
@@ -1014,7 +1066,7 @@ function onExchangeARMClicked(event) {
 
   modal.find('#setMemo').on('click', function () {
     var val = modal.find('#memo').val()
-    if (val.length != 34 || val[0] != 'r') {
+    if (val.length != 0 && (val.length != 34 || val[0] != 'r')) {
       alertError('Not a valid radar address')
       return
     }
