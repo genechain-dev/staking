@@ -1,6 +1,8 @@
 const path = require('path')
 const { CleanWebpackPlugin } = require('clean-webpack-plugin')
 const CopyPlugin = require('copy-webpack-plugin')
+const HtmlWebpackPlugin = require('html-webpack-plugin')
+
 const webpack = require('webpack')
 
 const DIST = path.resolve(__dirname, 'dist')
@@ -10,9 +12,9 @@ module.exports = {
   mode: 'development',
   entry: './src/index.js',
   output: {
-    filename: 'bundle.js',
+    filename: './[name].[contenthash].js',
     path: DIST,
-    publicPath: DIST
+    publicPath: ''
   },
   devServer: {
     contentBase: DIST,
@@ -26,16 +28,17 @@ module.exports = {
       $: 'jquery',
       jQuery: 'jquery'
     }),
-
+    new HtmlWebpackPlugin({
+      filename: 'index.html',
+      template: '!!raw-loader!./src/index.html',
+      scriptLoading: 'blocking',
+      minify: { removeComments: true, collapseWhitespace: true, removeAttributeQuotes: true }
+    }),
     // for build scripts
     new CopyPlugin({
       patterns: [
         {
-          flatten: true,
-          from: './src/*',
-          globOptions: {
-            ignore: ['**/*.js', '**/*.json']
-          }
+          from: './src/CNAME'
         }
       ]
     })
