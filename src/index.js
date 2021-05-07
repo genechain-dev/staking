@@ -4,13 +4,17 @@ import 'bootstrap/js/dist/toast'
 import 'backbone'
 import _ from 'underscore'
 import MetaMaskOnboarding from '@metamask/onboarding'
-import { armContractAddr, riboseContractAddr, riboseAbi } from './constants.json'
+import { armContractAddr, armAbi, riboseContractAddr, riboseAbi, vbcAbi } from './constants.json'
 import { Web3Provider } from '@ethersproject/providers'
 import { Contract } from '@ethersproject/contracts'
 import { formatEther, parseEther } from '@ethersproject/units'
 import { WeiPerEther } from '@ethersproject/constants'
 
-const geneChainId = 8080
+const geneChainIds = [
+  { id: 80, name: 'Mainnet' },
+  { id: 8080, name: 'Adenine TESTNET' },
+  { id: 18080, name: 'Cytosine TESTNET' }
+]
 const rewardPerBlock = 2
 const rewardShare = 0.8
 const rewardPerDay = rewardPerBlock * rewardShare * 28800
@@ -23,7 +27,7 @@ const { isMetaMaskInstalled } = MetaMaskOnboarding
 
 let onboarding
 let accounts
-let accountData = { address: '', balance: 0, balanceARM: 0, profit: 0 }
+let accountData = { address: '', balance: NaN, balanceARM: NaN, balanceVBC: NaN, profit: NaN, formatEther: formatEther }
 let networkData = { chainId: 0, lastBlock: 0 }
 let subscriptions = { newBlock: 0 }
 
@@ -64,8 +68,11 @@ function alertError(params) {
     { message: '', error: '' },
     typeof params === 'string' || params instanceof String ? { title: 'Error', message: params } : params
   )
-  if (data.error && data.error.data)
-    data.error.details = JSON.stringify(data.error.data, Object.getOwnPropertyNames(data.error.data))
+  if (data.error) {
+    console.error(data.error)
+    if (data.error.data)
+      data.error.details = JSON.stringify(data.error.data, Object.getOwnPropertyNames(data.error.data))
+  }
   _.extend(data, { message: _.template($('#modal-alert-template').html())(data) })
   return alertModal(data)
 }
@@ -96,6 +103,42 @@ function showToastError(params) {
     data.error.message +
     '</samp><br/>'
   return showToast(data)
+}
+
+function showToastTransaction(title, tx) {
+  console.debug('Got transaction', tx)
+  var toast = showToast({
+    title: title,
+    decor: '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>',
+    closeButton: false,
+    autohide: false,
+    message: 'Transaction hash: <samp class="text-break">' + tx.hash + '</samp>'
+  })
+
+  return tx
+    .wait()
+    .then((receipt) => {
+      console.debug(receipt)
+      showToast({
+        title: title + ' ' + (receipt.status == 1 ? 'succeeded' : 'failed'),
+        titleClasses: receipt.status == 1 ? 'bg-success text-white' : 'bg-danger text-white',
+        closeButton: receipt.status != 1,
+        autohide: receipt.status == 1,
+        message: 'Transaction hash: <samp class="text-break">' + receipt.transactionHash + '</samp>'
+      })
+      return receipt
+    })
+    .catch((error) => {
+      console.error(error)
+      showToastError({
+        title: title + ' failed',
+        titleClasses: 'bg-danger text-white',
+        autohide: false,
+        message: 'Transaction hash: <samp class="text-break">' + receipt.transactionHash + '</samp>',
+        error: error
+      })
+    })
+    .finally(() => toast.toast('hide'))
 }
 
 const checkNetwork = async () => {
@@ -151,9 +194,7 @@ function checkAccounts() {
       errDialog.find('#retry').on('click', errDialog.modal.bind(errDialog, 'hide')).on('click', onClickConnect)
       $('#connectButton').off('click').on('click', onClickConnect).prop('hidden', false).prop('disabled', false)
     })
-    .finally(function () {
-      dialog.removeClass('fade').on('shown.bs.modal', dialog.modal.bind(dialog, 'hide')).modal('hide')
-    })
+    .finally(() => dialog.removeClass('fade').on('shown.bs.modal', dialog.modal.bind(dialog, 'hide')).modal('hide'))
 }
 
 const onClickInstall = () => {
@@ -205,13 +246,16 @@ const onAccountsChanged = async (newAccounts) => {
 
 const onChainIdChanged = async (chainId) => {
   networkData.chainId = chainId
-  if (chainId != geneChainId) {
-    $('#wrongNetwork').modal().find('#addNetwork').on('click', addNetwork)
-    return
-  }
-  $('#wrongNetwork').modal('hide')
+  for (var geneChainId of geneChainIds) {
+    if (chainId == geneChainId.id) {
+      $('#wrongNetwork').modal('hide')
+      $('#network').prop('innerText', geneChainId.name)
 
-  checkAccounts()
+      checkAccounts()
+      return
+    }
+  }
+  $('#wrongNetwork').modal().find('#addNetwork').on('click', addNetwork)
 }
 
 const onMessage = async (message) => {
@@ -232,7 +276,7 @@ function addNetwork() {
       method: 'wallet_addEthereumChain',
       params: [
         {
-          chainId: '0x' + geneChainId.toString(16),
+          chainId: '0x' + networkData.chainId.toString(16),
           chainName: 'GeneChain Adenine Testnet',
           iconUrls: ['https://genechain.io/favicon.svg'],
           nativeCurrency: { name: 'Testing RNA', symbol: 'tRNA', decimals: 18 },
@@ -256,9 +300,7 @@ function addNetwork() {
       var errDialog = alertError(data)
       errDialog.find('#retry').on('click', errDialog.modal.bind(errDialog, 'hide')).on('click', addNetwork)
     })
-    .finally(() => {
-      dialog.removeClass('fade').on('shown.bs.modal', dialog.modal.bind(dialog, 'hide')).modal('hide')
-    })
+    .finally(() => dialog.removeClass('fade').on('shown.bs.modal', dialog.modal.bind(dialog, 'hide')).modal('hide'))
 }
 
 // validator list
@@ -377,38 +419,32 @@ new CandidatesView({ model: top }).render()
 let staked = new StakedCandidates()
 new StakedCandidatesView({ model: staked }).render()
 
+function reloadBalanceRNA() {
+  return ethereum.request({ method: 'eth_getBalance', params: [accountData.address] }).then((amount) => {
+    accountData.balance = amount
+    $('#accountDetail').find('#balance').prop('innerText', formatEther(amount))
+    return amount
+  })
+}
+
+function reloadBalanceARM() {
+  var ethersProvider = new Web3Provider(window.ethereum, 'any')
+  var armContract = new Contract(armContractAddr, armAbi, ethersProvider)
+  return armContract.balanceOf(accountData.address).then((amount) => {
+    accountData.balanceARM = amount
+    $('#accountDetail').find('#balanceARM').prop('innerText', formatEther(amount))
+    return amount
+  })
+}
+
 const reloadBalance = async () => {
   var account = accountData.address
   var accountDetail = $('#accountDetail')
   accountDetail.prop('hidden', false)
   accountDetail.find('#address').prop('innerText', account)
-  ethereum
-    .request({
-      method: 'eth_getBalance',
-      params: [account]
-    })
-    .then((bal) => {
-      accountData.balance = formatEther(bal)
-      accountDetail.find('#balance').prop('innerText', accountData.balance)
-    })
-  ethereum
-    .request({
-      method: 'eth_call',
-      params: [
-        {
-          to: armContractAddr,
-          data: '0x70a08231000000000000000000000000' + account.replace(/^0x/, '')
-        },
-        'latest'
-      ]
-    })
-    .then((balARM) => {
-      accountData.balanceARM = formatEther(balARM)
-      accountDetail.find('#balanceARM').prop('innerText', accountData.balanceARM)
-    })
-    .catch((error) => {
-      console.error('get arm balance', error)
-    })
+  accountDetail.find('#exchangeARM').off('click').on('click', onExchangeARMClicked)
+  reloadBalanceRNA()
+  reloadBalanceARM()
 
   var ethersProvider = new Web3Provider(window.ethereum, 'any')
   var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider)
@@ -576,7 +612,6 @@ var stakeDialog = {
         if (form.find('#rna').val().length > 0) rna = parseEther(form.find('#rna').val())
         if (form.find('#arm').val().length > 0) arm = parseEther(form.find('#arm').val())
       } catch (error) {
-        console.error(error)
         alertError({ title: 'Unexpect Error', error: error })
         return
       }
@@ -594,55 +629,16 @@ var stakeDialog = {
       var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider.getSigner())
       riboseContract
         .stake(this.model.get('validator'), arm, { value: rna })
-        .then(
-          function (result) {
-            console.debug(result)
-            this.close()
-            var toast = showToast({
-              title: 'Stake',
-              decor: '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>',
-              closeButton: false,
-              autohide: false,
-              message: 'Transaction hash: <samp class="text-break">' + result.hash + '</samp>'
-            })
-            result
-              .wait()
-              .then((receipt) => {
-                console.debug(receipt)
-                showToast({
-                  title: receipt.status == 1 ? 'Stake succeeded' : 'Stake failed',
-                  titleClasses: receipt.status == 1 ? 'bg-success text-white' : 'bg-danger text-white',
-                  closeButton: receipt.status != 1,
-                  autohide: receipt.status == 1,
-                  message: 'Transaction hash: <samp class="text-break">' + receipt.transactionHash + '</samp>'
-                })
-                if (receipt.status == 1) {
-                  reloadBalance()
-                  reloadValidators()
-                }
-              })
-              .catch((error) => {
-                console.error(error)
-                showToastError({
-                  title: 'Stake failed',
-                  titleClasses: 'bg-danger text-white',
-                  autohide: false,
-                  message: 'Transaction hash: <samp class="text-break">' + result.hash + '</samp>',
-                  error: error
-                })
-              })
-              .finally(function () {
-                toast.toast('hide')
-              })
-          }.bind(this)
-        )
-        .catch((error) => {
-          console.error(error)
-          alertError({
-            title: 'Stake failed',
-            error: error
+        .then((result) => {
+          this.close()
+          showToastTransaction('Stake', result).then((receipt) => {
+            if (receipt.status == 1) {
+              reloadBalance()
+              reloadValidators()
+            }
           })
         })
+        .catch((error) => alertError({ title: 'Stake failed', error: error }))
         .finally(
           function () {
             this.$('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true)
@@ -690,7 +686,6 @@ function onUnstakeClicked(event) {
       if (form.find('#rna').val().length > 0) rna = parseEther(form.find('#rna').val())
       if (form.find('#arm').val().length > 0) arm = parseEther(form.find('#arm').val())
     } catch (error) {
-      console.error(error)
       alertError({ title: 'Unexpect Error', error: error })
       return
     }
@@ -704,57 +699,17 @@ function onUnstakeClicked(event) {
     var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider.getSigner())
     riboseContract
       .unstake(model.get('validator'), rna, arm)
-      .then(
-        function (result) {
-          modal.modal('hide')
-          var toast = showToast({
-            title: 'Unstake',
-            decor: '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>',
-            closeButton: false,
-            autohide: false,
-            message: 'Transaction hash: <samp class="text-break">' + result.hash + '</samp>'
-          })
-          result
-            .wait()
-            .then((receipt) => {
-              console.debug(receipt)
-              showToast({
-                title: 'Unstake ' + (receipt.status == 1 ? 'succeeded' : 'failed'),
-                titleClasses: receipt.status == 1 ? 'bg-success text-white' : 'bg-danger text-white',
-                closeButton: receipt.status != 1,
-                autohide: receipt.status == 1,
-                message: 'Transaction hash: <samp class="text-break">' + receipt.transactionHash + '</samp>'
-              })
-              if (receipt.status == 1) {
-                reloadBalance()
-                reloadValidators()
-              }
-            })
-            .catch((error) => {
-              console.error(error)
-              showToastError({
-                title: 'Unstake failed',
-                titleClasses: 'bg-danger text-white',
-                autohide: false,
-                message: 'Transaction hash: <samp class="text-break">' + result.hash + '</samp>',
-                error: error
-              })
-            })
-            .finally(function () {
-              toast.toast('hide')
-            })
-        }.bind(this)
-      )
-      .catch((error) => {
-        console.error(error)
-        alertError({
-          title: 'Unstake failed',
-          error: error
+      .then((result) => {
+        modal.modal('hide')
+        showToastTransaction('Unstake', result).then((receipt) => {
+          if (receipt.status == 1) {
+            reloadBalance()
+            reloadValidators()
+          }
         })
       })
-      .finally(function () {
-        modal.find('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true)
-      })
+      .catch((error) => alertError({ title: 'Unstake failed', error: error }))
+      .finally(() => modal.find('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true))
   })
 }
 
@@ -780,54 +735,15 @@ var settleDialog = {
       riboseContract
         .settleStakerProfit(this.model.get('validator'))
         .then((result) => {
-          console.debug(result)
-          var toast = showToast({
-            title: 'Settle reward',
-            decor: '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>',
-            closeButton: false,
-            autohide: false,
-            message: 'Transaction hash: <samp class="text-break">' + result.hash + '</samp>'
-          })
           this.close()
-
-          result
-            .wait()
-            .then((receipt) => {
-              console.debug(receipt)
-              showToast({
-                title: 'Settle reward ' + (receipt.status == 1 ? 'succeeded' : 'failed'),
-                titleClasses: receipt.status == 1 ? 'bg-success text-white' : 'bg-danger text-white',
-                closeButton: receipt.status != 1,
-                autohide: receipt.status == 1,
-                message: 'Transaction hash: <samp class="text-break">' + receipt.transactionHash + '</samp>',
-                autohide: true
-              })
-              if (receipt.status == 1) {
-                reloadBalance()
-                reloadValidators()
-              }
-            })
-            .catch((error) => {
-              console.error(error)
-              showToastError({
-                title: 'Settle reward failed',
-                titleClasses: 'bg-danger text-white',
-                autohide: false,
-                message: 'Transaction hash: <samp class="text-break">' + receipt.transactionHash + '</samp>',
-                error: error
-              })
-            })
-            .finally(function () {
-              toast.toast('hide')
-            })
-        })
-        .catch((error) => {
-          console.error(error)
-          alertError({
-            title: 'Settle failed',
-            error: error
+          showToastTransaction('Settle reward', result).then((receipt) => {
+            if (receipt.status == 1) {
+              reloadBalance()
+              reloadValidators()
+            }
           })
         })
+        .catch((error) => alertError({ title: 'Settle failed', error: error }))
         .finally(
           function () {
             this.$('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true)
@@ -878,56 +794,218 @@ function onWithdrawClicked(event) {
     riboseContract
       .withdrawStakerProfits(accountData.address)
       .then((result) => {
-        console.debug(result)
-        var toast = showToast({
-          title: 'Withdraw profit',
-          decor: '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>',
-          closeButton: false,
-          autohide: false,
-          message: 'Transaction hash: <samp class="text-break">' + result.hash + '</samp>'
-        })
         modal.modal('hide')
-
-        result
-          .wait()
-          .then((receipt) => {
-            console.debug(receipt)
-            showToast({
-              title: 'Withdraw profit ' + (receipt.status == 1 ? 'succeeded' : 'failed'),
-              titleClasses: receipt.status == 1 ? 'bg-success text-white' : 'bg-danger text-white',
-              closeButton: receipt.status != 1,
-              autohide: receipt.status == 1,
-              message: 'Transaction hash: <samp class="text-break">' + receipt.transactionHash + '</samp>',
-              autohide: true
-            })
-            if (receipt.status == 1) {
-              reloadBalance()
-              reloadValidators()
-            }
-          })
-          .catch((error) => {
-            console.error(error)
-            showToastError({
-              title: 'Withdraw reward failed',
-              titleClasses: 'bg-danger text-white',
-              autohide: false,
-              message: 'Transaction hash: <samp class="text-break">' + receipt.transactionHash + '</samp>',
-              error: error
-            })
-          })
-          .finally(function () {
-            toast.toast('hide')
-          })
-      })
-      .catch((error) => {
-        console.error(error)
-        alertError({
-          title: 'Withdraw failed',
-          error: error
+        showToastTransaction('Withdraw profit', result).then((receipt) => {
+          if (receipt.status == 1) {
+            reloadBalance()
+            reloadValidators()
+          }
         })
       })
-      .finally(function () {
-        modal.find('#withdraw').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+      .catch((error) => alertError({ title: 'Withdraw failed', error: error }))
+      .finally(() => modal.find('#withdraw').prop('disabled', false).find('.spinner-border').prop('hidden', true))
+  })
+}
+
+function onExchangeARMClicked(event) {
+  var vbcContract, allowedVBC, stakedVBC
+  var data = {
+    title: 'Mint ARM',
+    message: _.template($('#exchange-arm-template').html())(accountData)
+  }
+  var modal = alertModal(data)
+
+  function reloadBalanceVBC() {
+    return vbcContract
+      .balanceOf(accountData.address)
+      .then((bal) => {
+        accountData.balanceVBC = bal
+        modal.find('#balanceVBC').prop('innerText', formatEther(bal))
+        return bal
+      })
+      .catch((error) => alertError({ title: 'Failed to get VBC balance', error: error }))
+  }
+
+  function reloadAllowanceVBC() {
+    return vbcContract
+      .allowance(accountData.address, armContractAddr)
+      .then((result) => {
+        allowedVBC = result
+        modal.find('#allowedVBC').prop('innerText', formatEther(result))
+        modal.find('#approveSpinner').prop('hidden', true)
+        modal.find('#approveDiv').prop('hidden', !result.isZero())
+        modal.find('#stakeDiv').prop('hidden', result.isZero())
+        return result
+      })
+      .catch((error) => alertError({ title: 'Failed to get VBC allowance', error: error }))
+  }
+  function reloadStakedVBC() {
+    return armContract
+      .getExchangeInfo(accountData.address)
+      .then((result) => {
+        stakedVBC = result[1]
+        modal.find('#memo').prop('innerText', result[0])
+        modal.find('#stakedVBC').prop('innerText', formatEther(result[1]))
+        return result
+      })
+      .catch((error) => alertError({ title: 'Failed to get staked VBC', error: error }))
+  }
+
+  var ethersProvider = new Web3Provider(window.ethereum, 'any')
+  var armContract = new Contract(armContractAddr, armAbi, ethersProvider.getSigner())
+  //Get vbc contract address
+  armContract
+    .SrcTokenAddr()
+    .then((addr) => {
+      if (!addr || addr == 0) {
+        alertError('VBC contract address not')
+        return
+      }
+      vbcContract = new Contract(addr, vbcAbi, ethersProvider.getSigner())
+      reloadBalanceVBC()
+      reloadAllowanceVBC()
+    })
+    .catch((error) => alertError({ title: 'Failed to get VBC contract address', error: error }))
+
+  reloadStakedVBC()
+
+  modal.find('#approve').on('click', function () {
+    var val = 0
+    try {
+      if (modal.find('#approveVBC').val().length > 0) val = parseEther(modal.find('#approveVBC').val())
+    } catch (error) {
+      alertError({ title: 'Unexpect Error', error: error })
+      return
+    }
+    if (val == 0 || val.isZero()) {
+      alertError('VBC should be greater than 0')
+      return
+    }
+
+    modal.find('#approve').prop('disabled', true).find('.spinner-border').prop('hidden', false)
+
+    vbcContract
+      .approve(armContractAddr, val)
+      .then((result) =>
+        showToastTransaction('Approve VBC', result).then((receipt) => {
+          if (receipt.status == 1) {
+            modal.find('#approve').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+            modal.find('#approveSpinner').prop('hidden', false)
+            modal.find('#approveDiv').prop('hidden', true)
+            reloadAllowanceVBC()
+          }
+        })
+      )
+      .catch((error) => {
+        alertError({ title: 'Failed to set VBC allowance', error: error })
+        modal.find('#approve').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+      })
+  })
+
+  modal.find('#stake').on('click', function () {
+    var val = 0
+    try {
+      if (modal.find('#stakeVBC').val().length > 0) val = parseEther(modal.find('#stakeVBC').val())
+    } catch (error) {
+      alertError({ title: 'Unexpect Error', error: error })
+      return
+    }
+    if (val == 0 || val.isZero()) {
+      alertError('VBC should be greater than 0')
+      return
+    } else if (val.gt(accountData.balanceVBC)) {
+      alertError('Not efficient VBC')
+      return
+    } else if (val.gt(allowedVBC)) {
+      alertError('Can not stake more than allowance')
+      return
+    }
+
+    modal.find('#stake').prop('disabled', true).find('.spinner-border').prop('hidden', false)
+    var ethersProvider = new Web3Provider(window.ethereum, 'any')
+    var armContract = new Contract(armContractAddr, armAbi, ethersProvider.getSigner())
+    armContract
+      .exchange(val)
+      .then((result) =>
+        showToastTransaction('Stake VBC', result).then((receipt) => {
+          if (receipt.status == 1) {
+            reloadBalanceARM().then((bal) => modal.find('#balanceARM').prop('innerText', formatEther(bal)))
+            reloadBalanceVBC()
+            reloadStakedVBC()
+            reloadAllowanceVBC()
+            modal.find('#stake').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+          }
+        })
+      )
+      .catch((error) => {
+        alertError({ title: 'Stake VBC failed', error: error })
+        modal.find('#stake').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+      })
+  })
+
+  modal.find('#unstake').on('click', function () {
+    var val = 0
+    try {
+      if (modal.find('#stakeVBC').val().length > 0) val = parseEther(modal.find('#stakeVBC').val())
+    } catch (error) {
+      alertError({ title: 'Unexpect Error', error: error })
+      return
+    }
+    if (val == 0 || val.isZero()) {
+      alertError('VBC should be greater than 0')
+      return
+    } else if (val.gt(accountData.balanceARM)) {
+      alertError('Not efficient ARM')
+      return
+    } else if (val.gt(stakedVBC)) {
+      alertError('Can not stake more than allowance')
+      return
+    }
+    modal.find('#unstake').prop('disabled', true).find('.spinner-border').prop('hidden', false)
+    var ethersProvider = new Web3Provider(window.ethereum, 'any')
+    var armContract = new Contract(armContractAddr, armAbi, ethersProvider.getSigner())
+    armContract
+      .burn(val)
+      .then((result) =>
+        showToastTransaction('Unstake VBC', result).then((receipt) => {
+          if (receipt.status == 1) {
+            reloadBalanceARM().then((bal) => modal.find('#balanceARM').prop('innerText', formatEther(bal)))
+            reloadBalanceVBC()
+            reloadStakedVBC()
+            reloadAllowanceVBC()
+            modal.find('#unstake').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+          }
+        })
+      )
+      .catch((error) => {
+        alertError({ title: 'Unstake VBC failed', error: error })
+        modal.find('#unstake').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+      })
+  })
+
+  modal.find('#setMemo').on('click', function () {
+    var val = modal.find('#memo').val()
+    if (val.length != 34 || val[0] != 'r') {
+      alertError('Not a valid radar address')
+      return
+    }
+    modal.find('#setMemo').prop('disabled', true).find('.spinner-border').prop('hidden', false)
+    var ethersProvider = new Web3Provider(window.ethereum, 'any')
+    var armContract = new Contract(armContractAddr, armAbi, ethersProvider.getSigner())
+    armContract
+      .setMemo(val)
+      .then((result) =>
+        showToastTransaction('Set ARM staking memo', result).then((receipt) => {
+          if (receipt.status == 1) {
+            reloadStakedVBC().then(() =>
+              modal.find('#setMemo').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+            )
+          }
+        })
+      )
+      .catch((error) => {
+        alertError({ title: 'Set memo failed', error: error })
+        modal.find('#setMemo').prop('disabled', false).find('.spinner-border').prop('hidden', true)
       })
   })
 }
