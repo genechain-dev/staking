@@ -374,6 +374,7 @@ let Candidate = Backbone.Model.extend({
     this.set('accountData', accountData)
   },
   defaults: {
+    formatEther: formatEther,
     ready: false,
     validator: '',
     active: false,
@@ -1039,7 +1040,7 @@ function onExchangeARMClicked(event) {
       alertError('Not efficient ARM')
       return
     } else if (val.gt(stakedVBC)) {
-      alertError('Can not stake more than allowance')
+      alertError('Can not burn more than staked VBC')
       return
     }
     modal.find('#unstake').prop('disabled', true).find('.spinner-border').prop('hidden', false)
@@ -1053,7 +1054,6 @@ function onExchangeARMClicked(event) {
             reloadBalanceARM().then((bal) => modal.find('#balanceARM').prop('innerText', formatEther(bal)))
             reloadBalanceVBC()
             reloadStakedVBC()
-            reloadAllowanceVBC()
             modal.find('#unstake').prop('disabled', false).find('.spinner-border').prop('hidden', true)
           }
         })
