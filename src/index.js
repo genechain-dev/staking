@@ -272,12 +272,13 @@ function addNetwork() {
     backdrop: 'static',
     message: 'If MetaMask does not prompt, please open it manually to complete configuration.'
   })
+  var chainId = 8080
   ethereum
     .request({
       method: 'wallet_addEthereumChain',
       params: [
         {
-          chainId: '0x' + networkData.chainId.toString(16),
+          chainId: '0x' + chainId.toString(16),
           chainName: 'GeneChain Adenine Testnet',
           iconUrls: ['https://genechain.io/favicon.svg'],
           nativeCurrency: { name: 'Testing RNA', symbol: 'tRNA', decimals: 18 },
