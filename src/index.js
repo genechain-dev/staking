@@ -458,9 +458,12 @@ const reloadBalance = async () => {
       accountDetail.find('#withdrawProfit').off('click').on('click', onWithdrawClicked).prop('hidden', false)
     })
     .catch((error) => {
+      console.error('getBookedProfit', error)
       accountDetail.find('#profit').prop('innerText', 0)
       accountDetail.find('#withdrawProfit').prop('hidden', true)
-      console.error('getBookedProfit', error)
+    })
+    .finally(() => {
+      accountDetail.find('#settleAll').off('click').on('click', onSettleAllClicked)
     })
 }
 
@@ -520,32 +523,6 @@ const reloadTopCandidate = async (candidate) => {
     apy: (rewardPerYear * 100) / validators.length / (info[2] == 0 ? 1 : info[2].div(WeiPerEther)),
     ready: true
   })
-  var info = await riboseContract.getStakingInfo(candidate.get('validator'), accountData.address)
-  if (info[0] > 0) {
-    // a temporary bug for candidate not added to staked when stake again after unstaking
-    $('#stakedCandidates').prop('hidden', false)
-    var c = new StakedCandidate({
-      validator: candidate.get('validator'),
-      stakedRNA: formatEther(info[0]),
-      stakedARM: formatEther(info[1]),
-      stakedPower: info[2],
-      bookAtValue: info[3],
-      lockBlock: parseInt(info[4]),
-      stakerShare: candidate.get('stakerShare'),
-      stakePower: candidate.get('stakePower'),
-      stakeRNA: candidate.get('stakeRNA'),
-      stakeARM: candidate.get('stakeARM'),
-      profitValue: candidate.get('profitValue'),
-      rewardPerDay: candidate.get('rewardPerDay'),
-      apy: candidate.get('apy'),
-      active: validators.indexOf(candidate.get('validator') >= 0)
-    })
-    staked.add(c)
-    var profit = await riboseContract.getStakerUnsettledProfit(candidate.get('validator'), accounts[0])
-    c.set({ profit: formatEther(profit), ready: true })
-
-    $('#stakedCandidates').find('.spinner-border').prop('hidden', true)
-  }
 }
 
 const reloadCandidate = async (address) => {
@@ -887,6 +864,60 @@ function onWithdrawClicked(event) {
       })
       .catch((error) => alertError({ title: 'Withdraw failed', error: error }))
       .finally(() => modal.find('#withdraw').prop('disabled', false).find('.spinner-border').prop('hidden', true))
+  })
+  modal.find('#settleAll').on('click', function () {
+    modal.find('#settleAll').prop('disabled', true).find('.spinner-border').prop('hidden', false)
+    var ethersProvider = new Web3Provider(window.ethereum, 'any')
+    var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider.getSigner())
+    riboseContract
+      .settleAllStakerProfit()
+      .then((result) => {
+        modal.modal('hide')
+        showToastTransaction('Withdraw profit', result).then((receipt) => {
+          if (receipt.status == 1) {
+            reloadBalance()
+          }
+        })
+      })
+      .catch((error) => alertError({ title: 'Withdraw failed', error: error }))
+      .finally(() => modal.find('#withdraw').prop('disabled', false).find('.spinner-border').prop('hidden', true))
+  })
+}
+
+function onSettleAllClicked(event) {
+  var data = {
+    title: 'Settle All Unsettled Rewards',
+    buttons: [
+      {
+        id: 'confirm',
+        text: '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" hidden></span>Confirm',
+        classNames: 'btn-primary'
+      }
+    ],
+    message: '<p>This will settle all your unsettled rewards from all candidates that you staked.</p>'
+  }
+
+  var modal = alertModal(data)
+  modal.find('#confirm').on('click', function () {
+    modal.find('#confirm').prop('disabled', true).find('.spinner-border').prop('hidden', false)
+    var ethersProvider = new Web3Provider(window.ethereum, 'any')
+    var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider.getSigner())
+    riboseContract
+      .settleAllStakerProfit()
+      .then((result) => {
+        modal.modal('hide')
+        showToastTransaction('Settle all', result).then((receipt) => {
+          if (receipt.status == 1) {
+            reloadBalance()
+            staked.map((s) => {
+              s.set({ ready: false })
+              reloadStakedCandidate(s)
+            })
+          }
+        })
+      })
+      .catch((error) => alertError({ title: 'Settle all failed', error: error }))
+      .finally(() => modal.find('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true))
   })
 }
 
