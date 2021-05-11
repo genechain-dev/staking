@@ -280,7 +280,6 @@ function addNetwork() {
         {
           chainId: '0x' + chainId.toString(16),
           chainName: 'GeneChain Adenine Testnet',
-          iconUrls: ['https://genechain.io/favicon.svg'],
           nativeCurrency: { name: 'Testing RNA', symbol: 'tRNA', decimals: 18 },
           rpcUrls: ['https://rpc-testnet.genechain.io'],
           blockExplorerUrls: ['https://scan-testnet.genechain.io/']
@@ -422,21 +421,27 @@ let staked = new StakedCandidates()
 new StakedCandidatesView({ model: staked }).render()
 
 function reloadBalanceRNA() {
-  return ethereum.request({ method: 'eth_getBalance', params: [accountData.address] }).then((amount) => {
-    accountData.balance = amount
-    $('#accountDetail').find('#balance').prop('innerText', formatEther(amount))
-    return amount
-  })
+  return ethereum
+    .request({ method: 'eth_getBalance', params: [accountData.address, 'latest'] })
+    .then((amount) => {
+      accountData.balance = amount
+      $('#accountDetail').find('#balance').prop('innerText', formatEther(amount))
+      return amount
+    })
+    .catch((error) => alertError({ title: 'Failed to get RNA balance', error: error }))
 }
 
 function reloadBalanceARM() {
   var ethersProvider = new Web3Provider(window.ethereum, 'any')
   var armContract = new Contract(armContractAddr, armAbi, ethersProvider)
-  return armContract.balanceOf(accountData.address).then((amount) => {
-    accountData.balanceARM = amount
-    $('#accountDetail').find('#balanceARM').prop('innerText', formatEther(amount))
-    return amount
-  })
+  return armContract
+    .balanceOf(accountData.address)
+    .then((amount) => {
+      accountData.balanceARM = amount
+      $('#accountDetail').find('#balanceARM').prop('innerText', formatEther(amount))
+      return amount
+    })
+    .catch((error) => alertError({ title: 'Failed to get ARM balance', error: error }))
 }
 
 const reloadBalance = async () => {
