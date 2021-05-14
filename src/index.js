@@ -11,7 +11,7 @@ import { formatEther, parseEther } from '@ethersproject/units'
 import { WeiPerEther } from '@ethersproject/constants'
 
 const geneChainIds = [
-  { id: 80, name: 'Mainnet' },
+  { id: 80, name: 'Main genenet' },
   { id: 8080, name: 'Adenine TESTNET' },
   { id: 18080, name: 'Cytosine TESTNET' }
 ]
@@ -19,9 +19,6 @@ const rewardPerBlock = 2
 const rewardShare = 0.9
 const rewardPerDay = rewardPerBlock * rewardShare * 28800
 const rewardPerYear = rewardPerDay * 365
-
-const currentUrl = new URL(window.location.href)
-const forwarderOrigin = currentUrl.hostname === 'localhost' ? 'http://localhost:9010' : undefined
 
 const { isMetaMaskInstalled } = MetaMaskOnboarding
 
@@ -34,7 +31,7 @@ let subscriptions = { newBlock: 0 }
 
 const initialize = () => {
   try {
-    onboarding = new MetaMaskOnboarding({ forwarderOrigin })
+    onboarding = new MetaMaskOnboarding()
   } catch (error) {
     console.error(error)
   }
@@ -272,17 +269,17 @@ function addNetwork() {
     backdrop: 'static',
     message: 'If MetaMask does not prompt, please open it manually to complete configuration.'
   })
-  var chainId = 8080
+  var chainId = 80
   ethereum
     .request({
       method: 'wallet_addEthereumChain',
       params: [
         {
           chainId: '0x' + chainId.toString(16),
-          chainName: 'GeneChain Adenine Testnet',
-          nativeCurrency: { name: 'Testing RNA', symbol: 'tRNA', decimals: 18 },
-          rpcUrls: ['https://rpc-testnet.genechain.io'],
-          blockExplorerUrls: ['https://scan-testnet.genechain.io/']
+          chainName: 'GeneChain',
+          nativeCurrency: { name: 'RNA', symbol: 'RNA', decimals: 18 },
+          rpcUrls: ['https://rpc.genechain.io'],
+          blockExplorerUrls: ['https://scan.genechain.io/']
         }
       ]
     })
