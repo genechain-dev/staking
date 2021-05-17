@@ -11,9 +11,9 @@ import { formatEther, parseEther } from '@ethersproject/units'
 import { WeiPerEther } from '@ethersproject/constants'
 
 const geneChainIds = [
-  { id: 80, name: 'Main genenet' },
-  { id: 8080, name: 'Adenine TESTNET' },
-  { id: 18080, name: 'Cytosine TESTNET' }
+  { id: 80, name: 'Main genenet', testnet: false },
+  { id: 8080, name: 'Adenine TESTNET', testnet: true },
+  { id: 18080, name: 'Cytosine TESTNET', testnet: true }
 ]
 const rewardPerBlock = 2
 const rewardShare = 0.9
@@ -247,8 +247,10 @@ const onChainIdChanged = async (chainId) => {
   for (var geneChainId of geneChainIds) {
     if (chainId == geneChainId.id) {
       $('#wrongNetwork').modal('hide')
-      $('#network').prop('innerText', geneChainId.name)
-
+      if (geneChainId.testnet) {
+        $('#network').prop('innerText', ' - ' + geneChainId.name)
+        $('title').text(geneChainId.name + ' - GeneChain Staking')
+      }
       checkAccounts()
       return
     }
