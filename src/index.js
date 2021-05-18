@@ -158,9 +158,8 @@ function checkAccounts() {
   var dialog = alertModal({
     title: 'Connecting to your wallet',
     closeButton: false,
-    backdrop: 'static',
     message: 'If MetaMask does not prompt, please open it manually to complete connection.'
-  }).removeClass('fade')
+  })
   ethereum
     .request({ method: 'eth_requestAccounts' })
     .then((result) => {
@@ -192,7 +191,7 @@ function checkAccounts() {
       errDialog.find('#retry').on('click', errDialog.modal.bind(errDialog, 'hide')).on('click', onClickConnect)
       $('#connectButton').off('click').on('click', onClickConnect).prop('hidden', false).prop('disabled', false)
     })
-    .finally(() => dialog.on('shown.bs.modal', dialog.modal.bind(dialog, 'hide')).modal('hide'))
+    .finally(() => dialog.removeClass('fade').on('shown.bs.modal', dialog.modal.bind(dialog, 'hide')).modal('hide'))
 }
 
 const onClickInstall = () => {
