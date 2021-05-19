@@ -8,7 +8,7 @@ import { armContractAddr, armAbi, riboseContractAddr, riboseAbi, vbcAbi } from '
 import { Web3Provider } from '@ethersproject/providers'
 import { Contract } from '@ethersproject/contracts'
 import { formatEther, parseEther } from '@ethersproject/units'
-import { WeiPerEther } from '@ethersproject/constants'
+import { Zero, WeiPerEther } from '@ethersproject/constants'
 import { BigNumber } from '@ethersproject/bignumber'
 import * as Sentry from '@sentry/browser'
 import { Integrations } from '@sentry/tracing'
@@ -16,7 +16,7 @@ import { Integrations } from '@sentry/tracing'
 Sentry.init({
   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
   integrations: [new Integrations.BrowserTracing()],
-  release: '0.0.2',
+  release: '0.0.3',
 
   // Set tracesSampleRate to 1.0 to capture 100%
   // of transactions for performance monitoring.
@@ -39,7 +39,14 @@ const { isMetaMaskInstalled } = MetaMaskOnboarding
 let onboarding
 let accounts // Connected accounts
 let validators // Active validators
-let accountData = { address: '', balance: NaN, balanceARM: NaN, balanceVBC: NaN, profit: NaN, formatEther: formatEther }
+let accountData = {
+  address: '',
+  balance: Zero,
+  balanceARM: Zero,
+  balanceVBC: Zero,
+  profit: Zero,
+  formatEther: formatEther
+}
 let networkData = { chainId: 0, lastBlock: 0 } //network data
 let subscriptions = { newBlock: 0 }
 
@@ -50,7 +57,12 @@ const initialize = () => {
     console.error(error)
     Sentry.captureException(error)
   }
-  checkNetwork()
+  try {
+    checkNetwork()
+  } catch (error) {
+    console.error(error)
+    Sentry.captureException(error)
+  }
 }
 window.addEventListener('DOMContentLoaded', initialize)
 
@@ -176,7 +188,7 @@ const checkNetwork = async () => {
 }
 
 function checkAccounts() {
-  console.warn('checkaccounts')
+  console.debug('checkaccounts')
   $('#connectButton').prop({ hidden: false, disabled: true }).find('.spinner-border').prop('hidden', false)
   $('#accountDetails').prop('hidden', true)
   var dialog = alertModal({
@@ -628,7 +640,7 @@ var stakeDialog = {
     className: 'modal fade',
     attributes: { tabindex: -1 },
     template: _.template($('#stake-template').html()),
-    allowedARM: NaN,
+    allowedARM: Zero,
 
     show: function () {
       this.$el.modal()

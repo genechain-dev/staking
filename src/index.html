@@ -239,14 +239,14 @@
               <%= apy.toFixed(2) %>%
               <button class="btn btn-link btn-sm p-0"  data-toggle="popover" title="Details" data-html="true" data-content='<code class="small">APY = Estimate daily reward * 365 / Total staked RNA</code><hr/>Estimate daily reward: <%= rewardPerDay.toFixed(2) %><small class="text-muted">RNA</small><br/>Total staked RNA: <%=stakeRNA%><small class="text-muted">RNA</small>'>More info</button>
               <% if (!active) { %>
-                  <br/><small class="text-muted">Estimate APY If active</small>
+                  <br/><small class="text-muted">Estimate APY If active</small><br/><small class="text-danger">STAKE ONLY IF YOU KNOW WHY!</small>
               <%}%>
           <% } else print('-') %>
           </td>
       <td>
         <%if(ready){%>
           <div class="btn-group" role="group">
-          <button class="btn btn-outline-primary btn-sm" id="stake">Stake</button>
+          <button class="btn <% if (!active) { %>btn-outline-secondary<%}else{%>btn-outline-primary<%}%> btn-sm" id="stake">Stake</button>
           <button class="btn btn-outline-primary btn-sm" id="unstake">Unstake</button>
           </div>
         <%}else{%>
@@ -350,7 +350,9 @@
                 </label>
               </div>
               <small class="form-text text-muted">
+                  <strong>Note:</strong><br/>
                   You can stake at least 1 RNA or 3 ARMs or both.<br/>
+                  You can stake at most 5 candidates.<br/>
                   Staking power will be <code>RNA</code> if ARM is less then 3, otherwise, <code>RNA * ln(ARM)</code>
               </small>
             </form>
