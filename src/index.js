@@ -16,7 +16,7 @@ import { Integrations } from '@sentry/tracing'
 Sentry.init({
   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
   integrations: [new Integrations.BrowserTracing()],
-  release: '0.0.6',
+  release: '0.0.7',
 
   // Set tracesSampleRate to 1.0 to capture 100%
   // of transactions for performance monitoring.
@@ -179,7 +179,10 @@ function showToastTransaction(title, tx) {
         error: error
       })
     })
-    .then(() => toast.toast('hide'))
+    .then((receipt) => {
+      toast.toast('hide')
+      return receipt
+    })
 }
 
 const checkNetwork = async () => {
@@ -759,11 +762,9 @@ var stakeDialog = {
               })
             })
             .catch((error) => alertError({ title: 'Stake failed', error: error }))
-            .then(
-              function () {
-                this.$('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true)
-              }.bind(this)
-            )
+            .then(() => {
+              this.$('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+            })
         })
         .catch((error) => {
           alertError({ title: 'Failed to estimate gas', error: error })
