@@ -16,12 +16,12 @@ import { Integrations } from '@sentry/tracing'
 Sentry.init({
   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
   integrations: [new Integrations.BrowserTracing()],
-  release: '0.0.4',
+  release: '0.0.5',
 
   // Set tracesSampleRate to 1.0 to capture 100%
   // of transactions for performance monitoring.
   // We recommend adjusting this value in production
-  tracesSampleRate: 1.0
+  tracesSampleRate: 0.01
 })
 
 const geneChainIds = [
@@ -79,6 +79,7 @@ function alertModal(params) {
     },
     typeof params === 'string' || params instanceof String ? { message: params } : params
   )
+  console.debug('modal', data)
   return $(_.template($('#modal-template').html())(data))
     .appendTo('body')
     .modal(data)
@@ -89,10 +90,14 @@ function alertModal(params) {
 }
 
 function captureWeb3Error(error) {
-  console.error(error)
+  console.error(
+    error,
+    'code',
+    error.code,
+    'data',
+    error.data ? JSON.stringify(error.data, Object.getOwnPropertyNames(error.data)) : '-'
+  )
   var err = new Error(error.message)
-  err.code = error.code
-  if (error.data) err.data = JSON.stringify(error.data, Object.getOwnPropertyNames(error.data))
   err.stack = error.stack
   Sentry.captureException(err)
 }
@@ -116,6 +121,7 @@ function showToast(params) {
     { title: '', titleClasses: '', decor: '', closeButton: true, message: '', autohide: true },
     params
   )
+  console.debug('toast', data)
   var toast = $(_.template($('#toast-template').html())(data))
     .appendTo('#toastHolder')
     .toast({ autohide: data.autohide ? true : false })

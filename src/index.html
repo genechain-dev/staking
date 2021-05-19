@@ -236,10 +236,11 @@
       </td>
       <td>
           <% if (apy>0) { %>
-              <%= apy.toFixed(2) %>%
-              <button class="btn btn-link btn-sm p-0"  data-toggle="popover" title="Details" data-html="true" data-content='<code class="small">APY = Estimate daily reward * 365 / Total staked RNA</code><hr/>Estimate daily reward: <%= rewardPerDay.toFixed(2) %><small class="text-muted">RNA</small><br/>Total staked RNA: <%=stakeRNA%><small class="text-muted">RNA</small>'>More info</button>
               <% if (!active) { %>
-                  <br/><small class="text-muted">Estimate APY If active</small><br/><small class="text-danger">STAKE ONLY IF YOU KNOW WHY!</small>
+                <small class="text-muted">STAKE ONLY IF YOU KNOW WHY!</small>
+              <%}else{%>
+                <%= apy.toFixed(2) %>%
+                <button class="btn btn-link btn-sm p-0"  data-toggle="popover" title="Details" data-html="true" data-content='<code class="small">APY = Estimate daily reward * 365 / Total staked RNA</code><hr/>Estimate daily reward: <%= rewardPerDay.toFixed(2) %><small class="text-muted">RNA</small><br/>Total staked RNA: <%=stakeRNA%><small class="text-muted">RNA</small>'>More info</button>
               <%}%>
           <% } else print('-') %>
           </td>
