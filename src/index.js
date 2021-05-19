@@ -16,13 +16,27 @@ import { Integrations } from '@sentry/tracing'
 Sentry.init({
   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
   integrations: [new Integrations.BrowserTracing()],
-  release: '0.0.5',
+  release: '0.0.6',
 
   // Set tracesSampleRate to 1.0 to capture 100%
   // of transactions for performance monitoring.
   // We recommend adjusting this value in production
   tracesSampleRate: 0.01
 })
+
+function captureWeb3Error(error) {
+  if (error.code == 4001) return
+  console.error(
+    error,
+    'code',
+    error.code,
+    'data',
+    error.data ? JSON.stringify(error.data, Object.getOwnPropertyNames(error.data)) : '-'
+  )
+  var err = new Error(error.code == -32603 && error.data && error.data.message ? error.data.message : error.message)
+  err.stack = error.stack
+  Sentry.captureException(err)
+}
 
 const geneChainIds = [
   { id: 80, name: 'Main genenet', testnet: false },
@@ -87,19 +101,6 @@ function alertModal(params) {
     .on('hidden.bs.modal', function (data) {
       data.currentTarget.remove()
     })
-}
-
-function captureWeb3Error(error) {
-  console.error(
-    error,
-    'code',
-    error.code,
-    'data',
-    error.data ? JSON.stringify(error.data, Object.getOwnPropertyNames(error.data)) : '-'
-  )
-  var err = new Error(error.message)
-  err.stack = error.stack
-  Sentry.captureException(err)
 }
 
 function alertError(params) {
