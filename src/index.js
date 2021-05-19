@@ -16,7 +16,7 @@ import { Integrations } from '@sentry/tracing'
 Sentry.init({
   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
   integrations: [new Integrations.BrowserTracing()],
-  release: '0.0.3',
+  release: '0.0.4',
 
   // Set tracesSampleRate to 1.0 to capture 100%
   // of transactions for performance monitoring.
@@ -172,7 +172,7 @@ function showToastTransaction(title, tx) {
         error: error
       })
     })
-    .finally(() => toast.toast('hide'))
+    .then(() => toast.toast('hide'))
 }
 
 const checkNetwork = async () => {
@@ -227,7 +227,7 @@ function checkAccounts() {
       errDialog.find('#retry').on('click', errDialog.modal.bind(errDialog, 'hide')).on('click', onClickConnect)
       $('#connectButton').off('click').on('click', onClickConnect).prop('hidden', false).prop('disabled', false)
     })
-    .finally(() => dialog.removeClass('fade').on('shown.bs.modal', dialog.modal.bind(dialog, 'hide')).modal('hide'))
+    .then(() => dialog.removeClass('fade').on('shown.bs.modal', dialog.modal.bind(dialog, 'hide')).modal('hide'))
 }
 
 const onClickInstall = () => {
@@ -335,7 +335,7 @@ function addNetwork() {
       var errDialog = alertError(data)
       errDialog.find('#retry').on('click', errDialog.modal.bind(errDialog, 'hide')).on('click', addNetwork)
     })
-    .finally(() => dialog.removeClass('fade').on('shown.bs.modal', dialog.modal.bind(dialog, 'hide')).modal('hide'))
+    .then(() => dialog.removeClass('fade').on('shown.bs.modal', dialog.modal.bind(dialog, 'hide')).modal('hide'))
 }
 
 // validator list
@@ -501,7 +501,7 @@ const reloadBalance = async () => {
       accountDetail.find('#profit').prop('innerText', 0)
       accountDetail.find('#withdrawProfit').prop('hidden', true)
     })
-    .finally(() => {
+    .then(() => {
       accountDetail.find('#settleAll').off('click').on('click', onSettleAllClicked)
     })
 }
@@ -752,7 +752,7 @@ var stakeDialog = {
               })
             })
             .catch((error) => alertError({ title: 'Stake failed', error: error }))
-            .finally(
+            .then(
               function () {
                 this.$('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true)
               }.bind(this)
@@ -832,7 +832,7 @@ function onUnstakeClicked(event) {
             })
           })
           .catch((error) => alertError({ title: 'Unstake failed', error: error }))
-          .finally(() => modal.find('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true))
+          .then(() => modal.find('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true))
       })
       .catch((error) => {
         alertError({ title: 'Failed to estimate gas', error: error })
@@ -880,7 +880,7 @@ var settleDialog = {
               })
             })
             .catch((error) => alertError({ title: 'Settle failed', error: error }))
-            .finally(
+            .then(
               function () {
                 this.$('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true)
               }.bind(this)
@@ -948,7 +948,7 @@ function onWithdrawClicked(event) {
             })
           })
           .catch((error) => alertError({ title: 'Withdraw failed', error: error }))
-          .finally(() => modal.find('#withdraw').prop('disabled', false).find('.spinner-border').prop('hidden', true))
+          .then(() => modal.find('#withdraw').prop('disabled', false).find('.spinner-border').prop('hidden', true))
       })
       .catch((error) => {
         alertError({ title: 'Failed to estimate gas', error: error })
@@ -975,7 +975,7 @@ function onWithdrawClicked(event) {
             })
           })
           .catch((error) => alertError({ title: 'Withdraw failed', error: error }))
-          .finally(() => modal.find('#withdraw').prop('disabled', false).find('.spinner-border').prop('hidden', true))
+          .then(() => modal.find('#withdraw').prop('disabled', false).find('.spinner-border').prop('hidden', true))
       })
       .catch((error) => {
         alertError({ title: 'Failed to estimate gas', error: error })
@@ -1020,7 +1020,7 @@ function onSettleAllClicked(event) {
             })
           })
           .catch((error) => alertError({ title: 'Settle all failed', error: error }))
-          .finally(() => modal.find('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true))
+          .then(() => modal.find('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true))
       })
       .catch((error) => {
         alertError({ title: 'Failed to estimate gas', error: error })
