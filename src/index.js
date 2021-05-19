@@ -16,7 +16,7 @@ import { Integrations } from '@sentry/tracing'
 Sentry.init({
   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
   integrations: [new Integrations.BrowserTracing()],
-  release: '0.0.9',
+  release: '0.0.10',
 
   // Set tracesSampleRate to 1.0 to capture 100%
   // of transactions for performance monitoring.
@@ -298,6 +298,9 @@ const onChainIdChanged = async (chainId) => {
       if (geneChainId.testnet) {
         $('#network').prop('innerText', ' - ' + geneChainId.name)
         $('title').text(geneChainId.name + ' - GeneChain Staking')
+      } else {
+        $('#network').prop('innerText', '')
+        $('title').text('GeneChain Staking')
       }
       checkAccounts()
       return
