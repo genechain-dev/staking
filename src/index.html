@@ -28,7 +28,10 @@
   <body>
     <main class="container-fluid">
       <div class="row justify-content-center">
-        <h1 class="col-sm-6 col-lg-8 text-center">GeneChain Staking<span id="network"></span></h1>
+        <h1 class="col-sm-6 col-lg-8 col-xl-12 text-center">
+          GeneChain Staking<span id="network"></span>
+          <a class="float-right text-muted small" title="Guides" href="https://forum.dera.finance/topic/57">&quest;</a>
+        </h1>
 
         <div class="col-sm-6 col-lg-4 col-xl-3 order-xl-9">
           <div class="card mb-2">
@@ -316,7 +319,7 @@
               <div class="form-group row no-gutters m-0">
                 <label for="rna" class="col-sm-3 col-form-label">RNA to stake:</label>
                 <div class="col-11 col-sm-2">
-                    <input id="rna" class="form-control" type="number" min="1" placeholder="0"/>
+                    <input id="rna" class="form-control" type="number" min="1"/>
                 </div>
                 <label class="col-1 col-form-label text-muted">RNA</label>
                 <label class="col-sm-9 offset-sm-3 small text-muted">
@@ -326,7 +329,7 @@
               <div class="form-group row no-gutters m-0">
                 <label for="arm" class="col-sm-3 col-form-label">ARM to stake:</label>
                 <div class="col-11 col-sm-2">
-                    <input id="arm" class="form-control" type="number" min="0" disabled placeholder="0"/>
+                    <input id="arm" class="form-control" type="number" min="0" disabled/>
                 </div>
                 <label class="col-1 col-form-label text-muted">ARM</label>
                 <label class="bg-light col-sm-9 offset-sm-3 small text-muted">
@@ -334,7 +337,7 @@
                   Remain Allowance:<samp class="text-dark" id="allowedARM">-</samp><small class="text-muted">ARM</small>
                   <div class="input-group" id="approveDiv" hidden>
                     <div class="input-group-prepend"><label for="approveARM" class="input-group-text col-form-label">Limit:</label></div>
-                    <input id="approveARM" class="form-control " type="number" min="0" value="1000" placeholder="0"/>
+                    <input id="approveARM" class="form-control " type="number" min="0" value="10000"/>
                     <div class="input-group-append"><label class="input-group-text">ARM</label></div>
                     <button id="approve" type="button" class="col-12 col-sm-4 ml-sm-1 btn btn-sm btn-primary">
                       <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" hidden></span>
@@ -372,7 +375,7 @@
         <div class="form-group row no-gutters m-0">
             <label for="rna" class="col-sm-4 col-form-label">RNA to unstake:</label>
             <div class="col-11 col-sm-2">
-                <input id="rna" class="form-control" type="number" min="1" placeholder="0"/>
+                <input id="rna" class="form-control" type="number" min="1"/>
             </div>
             <label class="col-1 col-form-label text-muted">RNA</label>
         </div>
@@ -382,7 +385,7 @@
         <div class="form-group row no-gutters m-0">
             <label for="arm" class="col-sm-4 col-form-label">ARM to unstake:</label>
             <div class="col-11 col-sm-2">
-                <input id="arm" class="form-control" type="number" min="0" placeholder="0"/>
+                <input id="arm" class="form-control" type="number" min="0" />
             </div>
             <label class="col-1 col-form-label text-muted">ARM</label>
         </div>
@@ -434,12 +437,10 @@
         <samp class="small text-dark" id="allowedVBC"><span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span></samp><small class="text-muted">VBC</small>
       </p>
       <span id="approveSpinner" class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
-      <div class="form-group row no-gutters m-0" id="approveDiv" hidden>
-        <label for="approveVBC" class="col-sm-1 col-form-label">Limit:</label>
-        <div class="col-11 col-sm-2">
-          <input id="approveVBC" class="form-control" type="number" min="0" value="1000" placeholder="0"/>
-        </div>
-        <label class="col-1 col-form-label text-muted">VBC</label>
+      <div class="input-group" id="approveDiv" hidden>
+        <div class="input-group-prepend"><label for="approveVBC" class="input-group-text col-form-label">Limit:</label></div>
+        <input id="approveVBC" class="form-control" type="number" min="0" value="10000" />
+        <div class="input-group-append"><label class="input-group-text">VBC</label></div>
         <button id="approve" type="button" class="col-12 col-sm-2 btn btn-sm btn-primary">
           <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" hidden></span>
           Approve
@@ -451,7 +452,7 @@
       </div>
       <div class="form-group row no-gutters m-0" id="stakeDiv" hidden>
         <div class="col-11 col-sm-2">
-          <input id="stakeVBC" class="form-control" type="number" min="0" placeholder="0"/>
+          <input id="stakeVBC" class="form-control" type="number" min="0" />
         </div>
         <label class="col-1 col-form-label text-muted">ARM</label>
         <div class="btn-group col-12 col-sm-4" role="group">

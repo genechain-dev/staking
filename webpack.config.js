@@ -2,6 +2,7 @@ const path = require('path')
 const { CleanWebpackPlugin } = require('clean-webpack-plugin')
 const CopyPlugin = require('copy-webpack-plugin')
 const HtmlWebpackPlugin = require('html-webpack-plugin')
+const SentryWebpackPlugin = require('@sentry/webpack-plugin')
 
 const webpack = require('webpack')
 
@@ -41,6 +42,17 @@ module.exports = {
           from: './src/CNAME'
         }
       ]
-    })
-  ]
+    }),
+      new SentryWebpackPlugin({
+        // sentry-cli configuration
+        authToken: process.env.SENTRY_AUTH_TOKEN,
+        org: 'genechain',
+        project: 'staking',
+        release: process.env.SENTRY_RELEASE,
+
+        // webpack specific configuration
+        include: '.',
+        ignore: ['node_modules', 'webpack.config.js']
+      })
+    ]
 }

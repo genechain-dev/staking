@@ -9,6 +9,20 @@ import { Web3Provider } from '@ethersproject/providers'
 import { Contract } from '@ethersproject/contracts'
 import { formatEther, parseEther } from '@ethersproject/units'
 import { WeiPerEther } from '@ethersproject/constants'
+import { BigNumber } from '@ethersproject/bignumber'
+import * as Sentry from '@sentry/browser'
+import { Integrations } from '@sentry/tracing'
+
+Sentry.init({
+  dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
+  integrations: [new Integrations.BrowserTracing()],
+  release: '0.0.1',
+
+  // Set tracesSampleRate to 1.0 to capture 100%
+  // of transactions for performance monitoring.
+  // We recommend adjusting this value in production
+  tracesSampleRate: 1.0
+})
 
 const geneChainIds = [
   { id: 80, name: 'Main genenet', testnet: false },
@@ -34,6 +48,7 @@ const initialize = () => {
     onboarding = new MetaMaskOnboarding()
   } catch (error) {
     console.error(error)
+    Sentry.captureException(error)
   }
   checkNetwork()
 }
@@ -61,13 +76,22 @@ function alertModal(params) {
     })
 }
 
+function captureWeb3Error(error) {
+  console.error(error)
+  var err = new Error(error.message)
+  err.code = error.code
+  err.data = error.data
+  err.stack = error.stack
+  Sentry.captureException(err)
+}
+
 function alertError(params) {
   var data = _.extend(
     { message: '', error: '' },
     typeof params === 'string' || params instanceof String ? { title: 'Error', message: params } : params
   )
   if (data.error) {
-    console.error(data.error)
+    captureWeb3Error(data.error)
     if (data.error.data)
       data.error.details = JSON.stringify(data.error.data, Object.getOwnPropertyNames(data.error.data))
   }
@@ -92,6 +116,7 @@ function showToast(params) {
 
 function showToastError(params) {
   var data = _.extend({ message: '', titleClasses: 'bg-danger text-white', error: '' }, params)
+  captureWeb3Error(data.error)
   data.message =
     data.message +
     '<br/>Error code: <samp class="text-break">' +
@@ -127,7 +152,6 @@ function showToastTransaction(title, tx) {
       return receipt
     })
     .catch((error) => {
-      console.error(error)
       showToastError({
         title: title + ' failed',
         titleClasses: 'bg-danger text-white',
@@ -647,19 +671,29 @@ var stakeDialog = {
 
       var ethersProvider = new Web3Provider(window.ethereum, 'any')
       var armContract = new Contract(armContractAddr, armAbi, ethersProvider.getSigner())
-      armContract
+      armContract.estimateGas
         .approve(riboseContractAddr, val)
-        .then((result) =>
-          showToastTransaction('Approve ARM', result).then((receipt) => {
-            if (receipt.status == 1) {
+        .then((gasEstimate) => {
+          armContract
+            .approve(riboseContractAddr, val, {
+              gasLimit: gasEstimate.mul(BigNumber.from(11000)).div(BigNumber.from(10000))
+            })
+            .then((result) =>
+              showToastTransaction('Approve ARM', result).then((receipt) => {
+                if (receipt.status == 1) {
+                  this.$el.find('#approve').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+                  this.$el.find('#approveDiv').prop('hidden', true)
+                  this.loadAllowrance()
+                }
+              })
+            )
+            .catch((error) => {
+              alertError({ title: 'Failed to set ARM allowance', error: error })
               this.$el.find('#approve').prop('disabled', false).find('.spinner-border').prop('hidden', true)
-              this.$el.find('#approveDiv').prop('hidden', true)
-              this.loadAllowrance()
-            }
-          })
-        )
+            })
+        })
         .catch((error) => {
-          alertError({ title: 'Failed to set ARM allowance', error: error })
+          alertError({ title: 'Failed to estimate gas', error: error })
           this.$el.find('#approve').prop('disabled', false).find('.spinner-border').prop('hidden', true)
         })
     },
@@ -688,23 +722,34 @@ var stakeDialog = {
       this.$('#confirm').prop('disabled', true).find('.spinner-border').prop('hidden', false)
       var ethersProvider = new Web3Provider(window.ethereum, 'any')
       var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider.getSigner())
-      riboseContract
+      riboseContract.estimateGas
         .stake(this.model.get('validator'), arm, { value: rna })
-        .then((result) => {
-          this.close()
-          showToastTransaction('Stake', result).then((receipt) => {
-            if (receipt.status == 1) {
-              reloadBalance()
-              reloadCandidate(this.model.get('validator'))
-            }
-          })
+        .then((gasEstimate) => {
+          riboseContract
+            .stake(this.model.get('validator'), arm, {
+              value: rna,
+              gasLimit: gasEstimate.mul(BigNumber.from(11000)).div(BigNumber.from(10000))
+            })
+            .then((result) => {
+              this.close()
+              showToastTransaction('Stake', result).then((receipt) => {
+                if (receipt.status == 1) {
+                  reloadBalance()
+                  reloadCandidate(this.model.get('validator'))
+                }
+              })
+            })
+            .catch((error) => alertError({ title: 'Stake failed', error: error }))
+            .finally(
+              function () {
+                this.$('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+              }.bind(this)
+            )
         })
-        .catch((error) => alertError({ title: 'Stake failed', error: error }))
-        .finally(
-          function () {
-            this.$('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true)
-          }.bind(this)
-        )
+        .catch((error) => {
+          alertError({ title: 'Failed to estimate gas', error: error })
+          this.$('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+        })
     },
 
     render: function () {
@@ -758,19 +803,29 @@ function onUnstakeClicked(event) {
     modal.find('#confirm').prop('disabled', true).find('.spinner-border').prop('hidden', false)
     var ethersProvider = new Web3Provider(window.ethereum, 'any')
     var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider.getSigner())
-    riboseContract
+    riboseContract.estimateGas
       .unstake(model.get('validator'), rna, arm)
-      .then((result) => {
-        modal.modal('hide')
-        showToastTransaction('Unstake', result).then((receipt) => {
-          if (receipt.status == 1) {
-            reloadBalance()
-            reloadCandidate(model.get('validator'))
-          }
-        })
+      .then((gasEstimate) => {
+        riboseContract
+          .unstake(model.get('validator'), rna, arm, {
+            gasLimit: gasEstimate.mul(BigNumber.from(11000)).div(BigNumber.from(10000))
+          })
+          .then((result) => {
+            modal.modal('hide')
+            showToastTransaction('Unstake', result).then((receipt) => {
+              if (receipt.status == 1) {
+                reloadBalance()
+                reloadCandidate(model.get('validator'))
+              }
+            })
+          })
+          .catch((error) => alertError({ title: 'Unstake failed', error: error }))
+          .finally(() => modal.find('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true))
       })
-      .catch((error) => alertError({ title: 'Unstake failed', error: error }))
-      .finally(() => modal.find('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true))
+      .catch((error) => {
+        alertError({ title: 'Failed to estimate gas', error: error })
+        modal.find('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+      })
   })
 }
 
@@ -795,24 +850,34 @@ var settleDialog = {
       this.$('#confirm').prop('disabled', true).find('.spinner-border').prop('hidden', false)
       var ethersProvider = new Web3Provider(window.ethereum, 'any')
       var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider.getSigner())
-      riboseContract
+      riboseContract.estimateGas
         .settleStakerProfit(this.model.get('validator'))
-        .then((result) => {
-          this.close()
-          showToastTransaction('Settle reward', result).then((receipt) => {
-            if (receipt.status == 1) {
-              reloadBalance()
-              this.model.set({ ready: false })
-              reloadStakedCandidate(this.model)
-            }
-          })
+        .then((gasEstimate) => {
+          riboseContract
+            .settleStakerProfit(this.model.get('validator'), {
+              gasLimit: gasEstimate.mul(BigNumber.from(11000)).div(BigNumber.from(10000))
+            })
+            .then((result) => {
+              this.close()
+              showToastTransaction('Settle reward', result).then((receipt) => {
+                if (receipt.status == 1) {
+                  reloadBalance()
+                  this.model.set({ ready: false })
+                  reloadStakedCandidate(this.model)
+                }
+              })
+            })
+            .catch((error) => alertError({ title: 'Settle failed', error: error }))
+            .finally(
+              function () {
+                this.$('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+              }.bind(this)
+            )
         })
-        .catch((error) => alertError({ title: 'Settle failed', error: error }))
-        .finally(
-          function () {
-            this.$('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true)
-          }.bind(this)
-        )
+        .catch((error) => {
+          alertError({ title: 'Failed to estimate gas', error: error })
+          this.$('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+        })
     },
 
     render: function () {
@@ -855,35 +920,55 @@ function onWithdrawClicked(event) {
     modal.find('#withdraw').prop('disabled', true).find('.spinner-border').prop('hidden', false)
     var ethersProvider = new Web3Provider(window.ethereum, 'any')
     var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider.getSigner())
-    riboseContract
+    riboseContract.estimateGas
       .withdrawStakerProfits(accountData.address)
-      .then((result) => {
-        modal.modal('hide')
-        showToastTransaction('Withdraw profit', result).then((receipt) => {
-          if (receipt.status == 1) {
-            reloadBalance()
-          }
-        })
+      .then((gasEstimate) => {
+        riboseContract
+          .withdrawStakerProfits(accountData.address, {
+            gasLimit: gasEstimate.mul(BigNumber.from(11000)).div(BigNumber.from(10000))
+          })
+          .then((result) => {
+            modal.modal('hide')
+            showToastTransaction('Withdraw profit', result).then((receipt) => {
+              if (receipt.status == 1) {
+                reloadBalance()
+              }
+            })
+          })
+          .catch((error) => alertError({ title: 'Withdraw failed', error: error }))
+          .finally(() => modal.find('#withdraw').prop('disabled', false).find('.spinner-border').prop('hidden', true))
       })
-      .catch((error) => alertError({ title: 'Withdraw failed', error: error }))
-      .finally(() => modal.find('#withdraw').prop('disabled', false).find('.spinner-border').prop('hidden', true))
+      .catch((error) => {
+        alertError({ title: 'Failed to estimate gas', error: error })
+        modal.find('#withdraw').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+      })
   })
   modal.find('#settleAll').on('click', function () {
     modal.find('#settleAll').prop('disabled', true).find('.spinner-border').prop('hidden', false)
     var ethersProvider = new Web3Provider(window.ethereum, 'any')
     var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider.getSigner())
-    riboseContract
+    riboseContract.estimateGas
       .settleAllStakerProfit()
-      .then((result) => {
-        modal.modal('hide')
-        showToastTransaction('Withdraw profit', result).then((receipt) => {
-          if (receipt.status == 1) {
-            reloadBalance()
-          }
-        })
+      .then((gasEstimate) => {
+        riboseContract
+          .settleAllStakerProfit({
+            gasLimit: gasEstimate.mul(BigNumber.from(11000)).div(BigNumber.from(10000))
+          })
+          .then((result) => {
+            modal.modal('hide')
+            showToastTransaction('Withdraw profit', result).then((receipt) => {
+              if (receipt.status == 1) {
+                reloadBalance()
+              }
+            })
+          })
+          .catch((error) => alertError({ title: 'Withdraw failed', error: error }))
+          .finally(() => modal.find('#withdraw').prop('disabled', false).find('.spinner-border').prop('hidden', true))
       })
-      .catch((error) => alertError({ title: 'Withdraw failed', error: error }))
-      .finally(() => modal.find('#withdraw').prop('disabled', false).find('.spinner-border').prop('hidden', true))
+      .catch((error) => {
+        alertError({ title: 'Failed to estimate gas', error: error })
+        modal.find('#withdraw').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+      })
   })
 }
 
@@ -905,22 +990,30 @@ function onSettleAllClicked(event) {
     modal.find('#confirm').prop('disabled', true).find('.spinner-border').prop('hidden', false)
     var ethersProvider = new Web3Provider(window.ethereum, 'any')
     var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider.getSigner())
-    riboseContract
+    riboseContract.estimateGas
       .settleAllStakerProfit()
-      .then((result) => {
-        modal.modal('hide')
-        showToastTransaction('Settle all', result).then((receipt) => {
-          if (receipt.status == 1) {
-            reloadBalance()
-            staked.map((s) => {
-              s.set({ ready: false })
-              reloadStakedCandidate(s)
+      .then((gasEstimate) => {
+        riboseContract
+          .settleAllStakerProfit({ gasLimit: gasEstimate.mul(BigNumber.from(11000)).div(BigNumber.from(10000)) })
+          .then((result) => {
+            modal.modal('hide')
+            showToastTransaction('Settle all', result).then((receipt) => {
+              if (receipt.status == 1) {
+                reloadBalance()
+                staked.map((s) => {
+                  s.set({ ready: false })
+                  reloadStakedCandidate(s)
+                })
+              }
             })
-          }
-        })
+          })
+          .catch((error) => alertError({ title: 'Settle all failed', error: error }))
+          .finally(() => modal.find('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true))
       })
-      .catch((error) => alertError({ title: 'Settle all failed', error: error }))
-      .finally(() => modal.find('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true))
+      .catch((error) => {
+        alertError({ title: 'Failed to estimate gas', error: error })
+        modal.find('#confirm').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+      })
   })
 }
 
@@ -950,8 +1043,8 @@ function onExchangeARMClicked(event) {
         allowedVBC = result
         modal.find('#allowedVBC').prop('innerText', formatEther(result))
         modal.find('#approveSpinner').prop('hidden', true)
-        modal.find('#approveDiv').prop('hidden', !result.isZero())
-        modal.find('#stakeDiv').prop('hidden', result.isZero())
+        modal.find('#approveDiv').prop('hidden', !result.lt(WeiPerEther))
+        modal.find('#stakeDiv').prop('hidden', result.lt(WeiPerEther))
         return result
       })
       .catch((error) => alertError({ title: 'Failed to get VBC allowance', error: error }))
@@ -1001,20 +1094,30 @@ function onExchangeARMClicked(event) {
 
     modal.find('#approve').prop('disabled', true).find('.spinner-border').prop('hidden', false)
 
-    vbcContract
+    vbcContract.estimateGas
       .approve(armContractAddr, val)
-      .then((result) =>
-        showToastTransaction('Approve VBC', result).then((receipt) => {
-          if (receipt.status == 1) {
+      .then((gasEstimate) => {
+        vbcContract
+          .approve(armContractAddr, val, {
+            gasLimit: gasEstimate.mul(BigNumber.from(11000)).div(BigNumber.from(10000))
+          })
+          .then((result) =>
+            showToastTransaction('Approve VBC', result).then((receipt) => {
+              if (receipt.status == 1) {
+                modal.find('#approve').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+                modal.find('#approveSpinner').prop('hidden', false)
+                modal.find('#approveDiv').prop('hidden', true)
+                reloadAllowanceVBC()
+              }
+            })
+          )
+          .catch((error) => {
+            alertError({ title: 'Failed to set VBC allowance', error: error })
             modal.find('#approve').prop('disabled', false).find('.spinner-border').prop('hidden', true)
-            modal.find('#approveSpinner').prop('hidden', false)
-            modal.find('#approveDiv').prop('hidden', true)
-            reloadAllowanceVBC()
-          }
-        })
-      )
+          })
+      })
       .catch((error) => {
-        alertError({ title: 'Failed to set VBC allowance', error: error })
+        alertError({ title: 'Failed to estimate gas', error: error })
         modal.find('#approve').prop('disabled', false).find('.spinner-border').prop('hidden', true)
       })
   })
@@ -1041,21 +1144,31 @@ function onExchangeARMClicked(event) {
     modal.find('#stake').prop('disabled', true).find('.spinner-border').prop('hidden', false)
     var ethersProvider = new Web3Provider(window.ethereum, 'any')
     var armContract = new Contract(armContractAddr, armAbi, ethersProvider.getSigner())
-    armContract
+    armContract.estimateGas
       .exchange(val)
-      .then((result) =>
-        showToastTransaction('Stake VBC', result).then((receipt) => {
-          if (receipt.status == 1) {
-            reloadBalanceARM().then((bal) => modal.find('#balanceARM').prop('innerText', formatEther(bal)))
-            reloadBalanceVBC()
-            reloadStakedVBC()
-            reloadAllowanceVBC()
+      .then((gasEstimate) => {
+        armContract
+          .exchange(val, {
+            gasLimit: gasEstimate.mul(BigNumber.from(11000)).div(BigNumber.from(10000))
+          })
+          .then((result) =>
+            showToastTransaction('Stake VBC', result).then((receipt) => {
+              if (receipt.status == 1) {
+                reloadBalanceARM().then((bal) => modal.find('#balanceARM').prop('innerText', formatEther(bal)))
+                reloadBalanceVBC()
+                reloadStakedVBC()
+                reloadAllowanceVBC()
+                modal.find('#stake').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+              }
+            })
+          )
+          .catch((error) => {
+            alertError({ title: 'Stake VBC failed', error: error })
             modal.find('#stake').prop('disabled', false).find('.spinner-border').prop('hidden', true)
-          }
-        })
-      )
+          })
+      })
       .catch((error) => {
-        alertError({ title: 'Stake VBC failed', error: error })
+        alertError({ title: 'Failed to estimate gas', error: error })
         modal.find('#stake').prop('disabled', false).find('.spinner-border').prop('hidden', true)
       })
   })
@@ -1081,20 +1194,30 @@ function onExchangeARMClicked(event) {
     modal.find('#unstake').prop('disabled', true).find('.spinner-border').prop('hidden', false)
     var ethersProvider = new Web3Provider(window.ethereum, 'any')
     var armContract = new Contract(armContractAddr, armAbi, ethersProvider.getSigner())
-    armContract
+    armContract.estimateGas
       .burn(val)
-      .then((result) =>
-        showToastTransaction('Unstake VBC', result).then((receipt) => {
-          if (receipt.status == 1) {
-            reloadBalanceARM().then((bal) => modal.find('#balanceARM').prop('innerText', formatEther(bal)))
-            reloadBalanceVBC()
-            reloadStakedVBC()
+      .then((gasEstimate) => {
+        armContract
+          .burn(val, {
+            gasLimit: gasEstimate.mul(BigNumber.from(11000)).div(BigNumber.from(10000))
+          })
+          .then((result) =>
+            showToastTransaction('Unstake VBC', result).then((receipt) => {
+              if (receipt.status == 1) {
+                reloadBalanceARM().then((bal) => modal.find('#balanceARM').prop('innerText', formatEther(bal)))
+                reloadBalanceVBC()
+                reloadStakedVBC()
+                modal.find('#unstake').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+              }
+            })
+          )
+          .catch((error) => {
+            alertError({ title: 'Unstake VBC failed', error: error })
             modal.find('#unstake').prop('disabled', false).find('.spinner-border').prop('hidden', true)
-          }
-        })
-      )
+          })
+      })
       .catch((error) => {
-        alertError({ title: 'Unstake VBC failed', error: error })
+        alertError({ title: 'Failed to estimate gas', error: error })
         modal.find('#unstake').prop('disabled', false).find('.spinner-border').prop('hidden', true)
       })
   })
@@ -1108,19 +1231,29 @@ function onExchangeARMClicked(event) {
     modal.find('#setMemo').prop('disabled', true).find('.spinner-border').prop('hidden', false)
     var ethersProvider = new Web3Provider(window.ethereum, 'any')
     var armContract = new Contract(armContractAddr, armAbi, ethersProvider.getSigner())
-    armContract
+    armContract.estimateGas
       .setMemo(val)
-      .then((result) =>
-        showToastTransaction('Set ARM staking memo', result).then((receipt) => {
-          if (receipt.status == 1) {
-            reloadStakedVBC().then(() =>
-              modal.find('#setMemo').prop('disabled', false).find('.spinner-border').prop('hidden', true)
-            )
-          }
-        })
-      )
+      .then((gasEstimate) => {
+        armContract
+          .setMemo(val, {
+            gasLimit: gasEstimate.mul(BigNumber.from(11000)).div(BigNumber.from(10000))
+          })
+          .then((result) =>
+            showToastTransaction('Set ARM staking memo', result).then((receipt) => {
+              if (receipt.status == 1) {
+                reloadStakedVBC().then(() =>
+                  modal.find('#setMemo').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+                )
+              }
+            })
+          )
+          .catch((error) => {
+            alertError({ title: 'Set memo failed', error: error })
+            modal.find('#setMemo').prop('disabled', false).find('.spinner-border').prop('hidden', true)
+          })
+      })
       .catch((error) => {
-        alertError({ title: 'Set memo failed', error: error })
+        alertError({ title: 'Failed to estimate gas', error: error })
         modal.find('#setMemo').prop('disabled', false).find('.spinner-border').prop('hidden', true)
       })
   })
