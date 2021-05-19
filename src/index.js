@@ -16,7 +16,7 @@ import { Integrations } from '@sentry/tracing'
 Sentry.init({
   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
   integrations: [new Integrations.BrowserTracing()],
-  release: '0.0.7',
+  release: '0.0.8',
 
   // Set tracesSampleRate to 1.0 to capture 100%
   // of transactions for performance monitoring.
@@ -175,7 +175,7 @@ function showToastTransaction(title, tx) {
         title: title + ' failed',
         titleClasses: 'bg-danger text-white',
         autohide: false,
-        message: 'Transaction hash: <samp class="text-break">' + receipt.transactionHash + '</samp>',
+        message: 'Transaction hash: <samp class="text-break">' + tx.hash + '</samp>',
         error: error
       })
     })
