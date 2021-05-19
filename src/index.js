@@ -16,7 +16,7 @@ import { Integrations } from '@sentry/tracing'
 Sentry.init({
   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
   integrations: [new Integrations.BrowserTracing()],
-  release: '0.0.1',
+  release: '0.0.2',
 
   // Set tracesSampleRate to 1.0 to capture 100%
   // of transactions for performance monitoring.
@@ -80,7 +80,7 @@ function captureWeb3Error(error) {
   console.error(error)
   var err = new Error(error.message)
   err.code = error.code
-  err.data = error.data
+  if (error.data) err.data = JSON.stringify(error.data, Object.getOwnPropertyNames(error.data))
   err.stack = error.stack
   Sentry.captureException(err)
 }

@@ -9,7 +9,7 @@ const webpack = require('webpack')
 const DIST = path.resolve(__dirname, 'dist')
 
 module.exports = {
-  devtool: 'eval-source-map',
+  devtool: 'source-map',
   mode: 'development',
   entry: './src/index.js',
   output: {
@@ -43,16 +43,16 @@ module.exports = {
         }
       ]
     }),
-      new SentryWebpackPlugin({
-        // sentry-cli configuration
-        authToken: process.env.SENTRY_AUTH_TOKEN,
-        org: 'genechain',
-        project: 'staking',
-        release: process.env.SENTRY_RELEASE,
+    new SentryWebpackPlugin({
+      // sentry-cli configuration
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      org: 'genechain',
+      project: 'staking',
+      release: process.env.SENTRY_RELEASE,
 
-        // webpack specific configuration
-        include: '.',
-        ignore: ['node_modules', 'webpack.config.js']
-      })
-    ]
+      // webpack specific configuration
+      include: '.',
+      ignore: ['node_modules', 'webpack.config.js']
+    })
+  ]
 }

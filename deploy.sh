@@ -94,6 +94,7 @@ function get_shorthash {
 
 function preprocess_and_deploy {
   yarn build || abort "Failed to build"
+  rm $WEBSITE_DIR_PATH/*.map $WEBSITE_DIR_PATH/*.txt
 
   local shorthash
   shorthash=$(get_shorthash)
