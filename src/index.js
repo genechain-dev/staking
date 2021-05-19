@@ -16,7 +16,7 @@ import { Integrations } from '@sentry/tracing'
 Sentry.init({
   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
   integrations: [new Integrations.BrowserTracing()],
-  release: '0.0.8',
+  release: '0.0.9',
 
   // Set tracesSampleRate to 1.0 to capture 100%
   // of transactions for performance monitoring.
@@ -191,10 +191,13 @@ const checkNetwork = async () => {
     return
   }
 
-  const chainId = await ethereum.request({ method: 'eth_chainId' })
-  onChainIdChanged(chainId)
-
-  ethereum.on('chainChanged', onChainIdChanged)
+  ethereum
+    .request({ method: 'eth_chainId' })
+    .then((chainId) => {
+      onChainIdChanged(chainId)
+      ethereum.on('chainChanged', onChainIdChanged)
+    })
+    .catch((error) => alertError({ message: 'Failed to get chain ID', error: error }))
 }
 
 function checkAccounts() {
