@@ -16,7 +16,7 @@ import { Integrations } from '@sentry/tracing'
 Sentry.init({
   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
   integrations: [new Integrations.BrowserTracing()],
-  release: '0.1.2',
+  release: '0.1.3',
 
   // Set tracesSampleRate to 1.0 to capture 100%
   // of transactions for performance monitoring.
@@ -455,6 +455,7 @@ function reloadBalanceRNA() {
   return ethereum
     .request({ method: 'eth_getBalance', params: [accountData.address, 'latest'] })
     .then((amount) => {
+      console.debug('eth_getBalance', amount)
       accountData.balance = amount
       $('#accountDetail').find('#balance').prop('innerText', formatEther(amount))
       return amount
@@ -470,6 +471,7 @@ function reloadBalanceARM() {
   return armContract
     .balanceOf(accountData.address)
     .then((amount) => {
+      console.debug('reloadBalanceARM got', amount)
       accountData.balanceARM = amount
       $('#accountDetail').find('#balanceARM').prop('innerText', formatEther(amount))
       return amount
@@ -764,6 +766,16 @@ var stakeDialog = {
         }
       } else if (arm.lt(parseEther('3'))) {
         alertError('ARM should be at least 3')
+        return
+      } else if (arm.gt(accountData.balanceARM)) {
+        alertError('Insufficient ARM')
+        return
+      }
+      if (rna.lt(parseEther('1'))) {
+        alertError('RNA should be at least 1')
+        return
+      } else if (rna.gt(accountData.balance)) {
+        alertError('Insufficient RNA')
         return
       }
       this.$('#confirm').prop('disabled', true).find('.spinner-border').prop('hidden', false)
@@ -1157,7 +1169,7 @@ function onExchangeARMClicked(event) {
       alertError('VBC should be greater than 0')
       return
     } else if (val.gt(accountData.balanceVBC)) {
-      alertError('Not efficient VBC')
+      alertError('Insufficient VBC')
       return
     } else if (val.gt(allowedVBC)) {
       alertError('Can not stake more than allowance')
@@ -1212,7 +1224,7 @@ function onExchangeARMClicked(event) {
       alertError('VBC should be greater than 0')
       return
     } else if (val.gt(accountData.balanceARM)) {
-      alertError('Not efficient ARM')
+      alertError('Insufficient ARM')
       return
     } else if (val.gt(stakedVBC)) {
       alertError('Can not burn more than staked VBC')
