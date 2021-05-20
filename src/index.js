@@ -16,7 +16,7 @@ import { Integrations } from '@sentry/tracing'
 Sentry.init({
   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
   integrations: [new Integrations.BrowserTracing()],
-  release: '0.1.6',
+  release: '0.1.7',
 
   // Set tracesSampleRate to 1.0 to capture 100%
   // of transactions for performance monitoring.
@@ -190,6 +190,7 @@ function showToastTransaction(title, tx) {
     })
     .then((receipt) => {
       toast.toast('hide')
+      reloadBalanceRNA()
       return receipt
     })
 }
@@ -787,8 +788,8 @@ var stakeDialog = {
       if (rna.lt(parseEther('1'))) {
         alertError('RNA should be at least 1')
         return
-      } else if (rna.gt(accountData.balance)) {
-        alertError('Insufficient RNA')
+      } else if (!rna.lt(accountData.balance)) {
+        alertError("Insufficient RNA, don't forget the gas fee.")
         return
       }
       this.$('#confirm').prop('disabled', true).find('.spinner-border').prop('hidden', false)
