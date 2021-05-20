@@ -16,7 +16,7 @@ import { Integrations } from '@sentry/tracing'
 Sentry.init({
   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
   integrations: [new Integrations.BrowserTracing()],
-  release: '0.1.0',
+  release: '0.1.1',
 
   // Set tracesSampleRate to 1.0 to capture 100%
   // of transactions for performance monitoring.
@@ -721,7 +721,7 @@ var stakeDialog = {
             })
             .then((result) =>
               showToastTransaction('Approve ARM', result).then((receipt) => {
-                if (receipt.status == 1) {
+                if (receipt && receipt.status == 1) {
                   this.$el.find('#approve').prop('disabled', false).find('.spinner-border').prop('hidden', true)
                   this.$el.find('#approveDiv').prop('hidden', true)
                   this.loadAllowrance()
@@ -774,7 +774,7 @@ var stakeDialog = {
             .then((result) => {
               this.close()
               showToastTransaction('Stake', result).then((receipt) => {
-                if (receipt.status == 1) {
+                if (receipt && receipt.status == 1) {
                   if (!rna.isZero()) reloadBalanceRNA()
                   if (!arm.isZero()) reloadBalanceARM()
                   reloadCandidate(this.model.get('validator'))
@@ -866,7 +866,7 @@ function onUnstakeClicked(event) {
           .then((result) => {
             modal.modal('hide')
             showToastTransaction('Unstake', result).then((receipt) => {
-              if (receipt.status == 1) {
+              if (receipt && receipt.status == 1) {
                 if (!rna.isZero()) reloadBalanceRNA()
                 if (!arm.isZero()) reloadBalanceARM()
                 reloadCandidate(model.get('validator'))
@@ -914,7 +914,7 @@ var settleDialog = {
             .then((result) => {
               this.close()
               showToastTransaction('Settle reward', result).then((receipt) => {
-                if (receipt.status == 1) {
+                if (receipt && receipt.status == 1) {
                   reloadBalanceRNA()
                   this.model.set({ ready: false })
                   reloadStakedCandidate(this.model)
@@ -984,7 +984,7 @@ function onWithdrawClicked(event) {
           .then((result) => {
             modal.modal('hide')
             showToastTransaction('Withdraw profit', result).then((receipt) => {
-              if (receipt.status == 1) {
+              if (receipt && receipt.status == 1) {
                 reloadBalanceRNA()
                 reloadBookedProfit()
               }
@@ -1026,7 +1026,7 @@ function onSettleAllClicked(event) {
           .then((result) => {
             modal.modal('hide')
             showToastTransaction('Settle all', result).then((receipt) => {
-              if (receipt.status == 1) {
+              if (receipt && receipt.status == 1) {
                 reloadBalanceRNA()
                 reloadBookedProfit()
                 staked.map((s) => {
@@ -1120,7 +1120,7 @@ function onExchangeARMClicked(event) {
           })
           .then((result) =>
             showToastTransaction('Approve VBC', result).then((receipt) => {
-              if (receipt.status == 1) {
+              if (receipt && receipt.status == 1) {
                 modal.find('#approve').prop('disabled', false).find('.spinner-border').prop('hidden', true)
                 modal.find('#approveSpinner').prop('hidden', false)
                 modal.find('#approveDiv').prop('hidden', true)
@@ -1170,7 +1170,7 @@ function onExchangeARMClicked(event) {
           })
           .then((result) =>
             showToastTransaction('Stake VBC', result).then((receipt) => {
-              if (receipt.status == 1) {
+              if (receipt && receipt.status == 1) {
                 reloadBalanceARM().then((bal) =>
                   modal.find('#balanceARM').prop('innerText', bal ? formatEther(bal) : '-')
                 )
@@ -1224,7 +1224,7 @@ function onExchangeARMClicked(event) {
           })
           .then((result) =>
             showToastTransaction('Unstake VBC', result).then((receipt) => {
-              if (receipt.status == 1) {
+              if (receipt && receipt.status == 1) {
                 reloadBalanceARM().then((bal) =>
                   modal.find('#balanceARM').prop('innerText', bal ? formatEther(bal) : '-')
                 )
@@ -1265,7 +1265,7 @@ function onExchangeARMClicked(event) {
           })
           .then((result) =>
             showToastTransaction('Set ARM staking memo', result).then((receipt) => {
-              if (receipt.status == 1) {
+              if (receipt && receipt.status == 1) {
                 reloadStakedVBC().then(() =>
                   modal.find('#setMemo').prop('disabled', false).find('.spinner-border').prop('hidden', true)
                 )
