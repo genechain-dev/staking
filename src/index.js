@@ -16,7 +16,7 @@ import { Integrations } from '@sentry/tracing'
 Sentry.init({
   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
   integrations: [new Integrations.BrowserTracing()],
-  release: '0.0.10',
+  release: '0.1.0',
 
   // Set tracesSampleRate to 1.0 to capture 100%
   // of transactions for performance monitoring.
@@ -61,8 +61,7 @@ let accountData = {
   profit: Zero,
   formatEther: formatEther
 }
-let networkData = { chainId: 0, lastBlock: 0 } //network data
-let subscriptions = { newBlock: 0 }
+let networkData = { chainId: 0, lastBlock: { number: 0 } } //network data
 
 const initialize = () => {
   try {
@@ -109,6 +108,7 @@ function alertError(params) {
     typeof params === 'string' || params instanceof String ? { title: 'Error', message: params } : params
   )
   if (data.error) {
+    console.debug('modal error', data)
     captureWeb3Error(data.error)
     if (data.error.data)
       data.error.details = JSON.stringify(data.error.data, Object.getOwnPropertyNames(data.error.data))
@@ -135,6 +135,7 @@ function showToast(params) {
 
 function showToastError(params) {
   var data = _.extend({ message: '', titleClasses: 'bg-danger text-white', error: '' }, params)
+  console.debug('toast error', data)
   captureWeb3Error(data.error)
   data.message =
     data.message +
@@ -264,27 +265,6 @@ const onAccountsChanged = async (newAccounts) => {
 
     reloadBalance()
     reloadValidators()
-
-    ethereum
-      .request({ method: 'eth_getBlockByNumber', params: ['latest', false] })
-      .then((result) => {
-        console.debug('latest block', result)
-        networkData.lastBlock = result
-      })
-      .catch((error) => {
-        console.error('getBlock', error)
-      })
-
-    ethereum
-      .request({ method: 'eth_subscribe', params: ['newHeads'] })
-      .then((result) => {
-        console.debug('subscribe', result)
-        subscriptions.newBlock = result
-        ethereum.on('message', onMessage)
-      })
-      .catch((error) => {
-        console.error('subscribe', error)
-      })
   } else {
     $('#connectButton').prop('hidden', false).prop('disabled', false)
   }
@@ -307,11 +287,6 @@ const onChainIdChanged = async (chainId) => {
     }
   }
   $('#wrongNetwork').modal().find('#addNetwork').on('click', addNetwork)
-}
-
-const onMessage = async (message) => {
-  console.debug('message', message)
-  if (message.data.subscription == subscriptions.newBlock) networkData.lastBlock = message.data.result
 }
 
 function addNetwork() {
@@ -368,9 +343,9 @@ let CandidateView = Backbone.View.extend({
     this.model.set('id', this.model.collection.indexOf(this.model) + 1)
     this.$el.html(this.template(this.model.toJSON()))
     this.$el.find('#stake').on('click', this.model, stakeDialog.show)
-    this.$el.find('#unstake').on('click', this.model, onUnstakeClicked)
-    this.$el.find('#settle').on('click', this.model, settleDialog.show)
     if (!this.model.get('staked')) this.$el.find('#unstake').remove()
+    else this.$el.find('#unstake').on('click', this.model, onUnstakeClicked)
+    this.$el.find('#settle').on('click', this.model, settleDialog.show)
     this.$el.find('[data-toggle="popover"]').popover({ trigger: 'focus' })
     this.$el.find('[data-toggle="tooltip"]').tooltip()
     return this
@@ -481,6 +456,8 @@ function reloadBalanceRNA() {
     .catch((error) => alertError({ title: 'Failed to get RNA balance', error: error }))
 }
 
+let vbcContract
+
 function reloadBalanceARM() {
   var ethersProvider = new Web3Provider(window.ethereum, 'any')
   var armContract = new Contract(armContractAddr, armAbi, ethersProvider)
@@ -494,32 +471,62 @@ function reloadBalanceARM() {
     .catch((error) => alertError({ title: 'Failed to get ARM balance', error: error }))
 }
 
-const reloadBalance = async () => {
-  var account = accountData.address
-  var accountDetail = $('#accountDetail')
-  accountDetail.prop('hidden', false)
-  accountDetail.find('#address').prop('innerText', account)
-  accountDetail.find('#exchangeARM').off('click').on('click', onExchangeARMClicked)
-  reloadBalanceRNA()
-  reloadBalanceARM()
+function reloadBalanceVBC() {
+  var loadBalanceVBC = () => {
+    return vbcContract
+      .balanceOf(accountData.address)
+      .then((amount) => {
+        accountData.balanceVBC = amount
+        $('#accountDetail').find('#balanceVBC').prop('innerText', formatEther(amount))
+        return amount
+      })
+      .catch((error) => showToastError({ title: 'Failed to get VBC balance', error: error }))
+  }
+  if (!vbcContract) {
+    var ethersProvider = new Web3Provider(window.ethereum, 'any')
+    var armContract = new Contract(armContractAddr, armAbi, ethersProvider)
+    return armContract
+      .SrcTokenAddr()
+      .then((addr) => {
+        vbcContract = new Contract(addr, vbcAbi, ethersProvider.getSigner())
+        console.debug('vbc contract', addr)
+        return loadBalanceVBC()
+      })
+      .catch((error) => showToastError({ title: 'Failed to get VBC contract address', error: error }))
+  }
+  return loadBalanceVBC()
+}
 
+function reloadBookedProfit() {
   var ethersProvider = new Web3Provider(window.ethereum, 'any')
   var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider)
-  riboseContract
-    .getBookedProfit(account)
+  return riboseContract
+    .getBookedProfit(accountData.address)
     .then((profit) => {
       accountData.profit = formatEther(profit)
-      accountDetail.find('#profit').prop('innerText', accountData.profit)
-      accountDetail.find('#withdrawProfit').off('click').on('click', onWithdrawClicked).prop('hidden', false)
+      $('#accountDetail').find('#profit').prop('innerText', accountData.profit)
+      if (!profit.isZero())
+        $('#accountDetail').find('#withdrawProfit').off('click').on('click', onWithdrawClicked).prop('hidden', false)
     })
     .catch((error) => {
       console.error('getBookedProfit', error)
-      accountDetail.find('#profit').prop('innerText', 0)
-      accountDetail.find('#withdrawProfit').prop('hidden', true)
+      $('#accountDetail').find('#profit').prop('innerText', '-')
+      $('#accountDetail').find('#withdrawProfit').prop('hidden', true)
     })
     .then(() => {
-      accountDetail.find('#settleAll').off('click').on('click', onSettleAllClicked)
+      $('#accountDetail').find('#settleAll').off('click').on('click', onSettleAllClicked)
     })
+}
+
+const reloadBalance = async () => {
+  var accountDetail = $('#accountDetail')
+  accountDetail.prop('hidden', false)
+  accountDetail.find('#address').prop('innerText', accountData.address)
+  accountDetail.find('#exchangeARM').off('click').on('click', onExchangeARMClicked)
+  reloadBalanceRNA()
+  reloadBalanceARM()
+  reloadBalanceVBC()
+  reloadBookedProfit()
 }
 
 const reloadStakedCandidate = async (candidate) => {
@@ -554,6 +561,7 @@ const reloadTopCandidate = async (candidate) => {
   var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider)
   var s = staked.findWhere({ validator: candidate.get('validator') })
   if (s) {
+    // already loaded in staked candidates
     candidate.set({
       stakerShare: s.get('stakerShare'),
       stakePower: s.get('stakePower'),
@@ -562,6 +570,11 @@ const reloadTopCandidate = async (candidate) => {
       profitValue: s.get('profitValue'),
       rewardPerDay: s.get('rewardPerDay'),
       apy: s.get('apy'),
+      stakedRNA: s.get('stakedRNA'),
+      stakedARM: s.get('stakedARM'),
+      stakedPower: s.get('stakedPower'),
+      bookAtValue: s.get('bookAtValue'),
+      lockBlock: s.get('lockBlock'),
       ready: true
     })
     return
@@ -729,8 +742,8 @@ var stakeDialog = {
     submit: async function (event) {
       this.model.set('accountData', accountData)
       var form = this.$('form')
-      var rna = 0,
-        arm = 0
+      var rna = Zero,
+        arm = Zero
       try {
         if (form.find('#rna').val().length > 0) rna = parseEther(form.find('#rna').val())
         if (form.find('#arm').val().length > 0) arm = parseEther(form.find('#arm').val())
@@ -738,8 +751,8 @@ var stakeDialog = {
         alertError({ title: 'Unexpect Error', error: error })
         return
       }
-      if (arm == 0) {
-        if (rna == 0) {
+      if (arm.isZero()) {
+        if (rna.isZero()) {
           alertError('You should stake at least 1 RNA or 3 ARMs')
           return
         }
@@ -762,7 +775,8 @@ var stakeDialog = {
               this.close()
               showToastTransaction('Stake', result).then((receipt) => {
                 if (receipt.status == 1) {
-                  reloadBalance()
+                  if (!rna.isZero()) reloadBalanceRNA()
+                  if (!arm.isZero()) reloadBalanceARM()
                   reloadCandidate(this.model.get('validator'))
                 }
               })
@@ -810,10 +824,23 @@ function onUnstakeClicked(event) {
     message: _.template($('#unstake-template').html())(model.toJSON())
   }
   var modal = alertModal(data)
+  modal.find('#confirm').prop('disabled', true).find('.spinner-border').prop('hidden', false)
+
+  ethereum.request({ method: 'eth_getBlockByNumber', params: ['latest', false] }).then((result) => {
+    console.debug('latest block', result)
+    networkData.lastBlock = result
+    modal.find('#currentBlock').prop('innerText', parseInt(result.number))
+    modal
+      .find('#confirm')
+      .prop('disabled', model.get('lockBlock') + 86400 > result.number)
+      .find('.spinner-border')
+      .prop('hidden', true)
+  })
+
   modal.find('#confirm').on('click', function () {
     var form = modal.find('form')
-    var rna = 0,
-      arm = 0
+    var rna = Zero,
+      arm = Zero
     try {
       if (form.find('#rna').val().length > 0) rna = parseEther(form.find('#rna').val())
       if (form.find('#arm').val().length > 0) arm = parseEther(form.find('#arm').val())
@@ -821,7 +848,7 @@ function onUnstakeClicked(event) {
       alertError({ title: 'Unexpect Error', error: error })
       return
     }
-    if (arm == 0 && rna == 0) {
+    if (arm.isZero() && rna.isZero()) {
       alertError('RNA and ARM can not be both 0')
       return
     }
@@ -840,7 +867,8 @@ function onUnstakeClicked(event) {
             modal.modal('hide')
             showToastTransaction('Unstake', result).then((receipt) => {
               if (receipt.status == 1) {
-                reloadBalance()
+                if (!rna.isZero()) reloadBalanceRNA()
+                if (!arm.isZero()) reloadBalanceARM()
                 reloadCandidate(model.get('validator'))
               }
             })
@@ -887,7 +915,7 @@ var settleDialog = {
               this.close()
               showToastTransaction('Settle reward', result).then((receipt) => {
                 if (receipt.status == 1) {
-                  reloadBalance()
+                  reloadBalanceRNA()
                   this.model.set({ ready: false })
                   reloadStakedCandidate(this.model)
                 }
@@ -957,34 +985,8 @@ function onWithdrawClicked(event) {
             modal.modal('hide')
             showToastTransaction('Withdraw profit', result).then((receipt) => {
               if (receipt.status == 1) {
-                reloadBalance()
-              }
-            })
-          })
-          .catch((error) => alertError({ title: 'Withdraw failed', error: error }))
-          .then(() => modal.find('#withdraw').prop('disabled', false).find('.spinner-border').prop('hidden', true))
-      })
-      .catch((error) => {
-        alertError({ title: 'Failed to estimate gas', error: error })
-        modal.find('#withdraw').prop('disabled', false).find('.spinner-border').prop('hidden', true)
-      })
-  })
-  modal.find('#settleAll').on('click', function () {
-    modal.find('#settleAll').prop('disabled', true).find('.spinner-border').prop('hidden', false)
-    var ethersProvider = new Web3Provider(window.ethereum, 'any')
-    var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider.getSigner())
-    riboseContract.estimateGas
-      .settleAllStakerProfit()
-      .then((gasEstimate) => {
-        riboseContract
-          .settleAllStakerProfit({
-            gasLimit: gasEstimate.mul(BigNumber.from(11000)).div(BigNumber.from(10000))
-          })
-          .then((result) => {
-            modal.modal('hide')
-            showToastTransaction('Withdraw profit', result).then((receipt) => {
-              if (receipt.status == 1) {
-                reloadBalance()
+                reloadBalanceRNA()
+                reloadBookedProfit()
               }
             })
           })
@@ -1025,7 +1027,8 @@ function onSettleAllClicked(event) {
             modal.modal('hide')
             showToastTransaction('Settle all', result).then((receipt) => {
               if (receipt.status == 1) {
-                reloadBalance()
+                reloadBalanceRNA()
+                reloadBookedProfit()
                 staked.map((s) => {
                   s.set({ ready: false })
                   reloadStakedCandidate(s)
@@ -1044,23 +1047,12 @@ function onSettleAllClicked(event) {
 }
 
 function onExchangeARMClicked(event) {
-  var vbcContract, allowedVBC, stakedVBC
+  var allowedVBC, stakedVBC
   var data = {
     title: 'Mint ARM',
     message: _.template($('#exchange-arm-template').html())(accountData)
   }
   var modal = alertModal(data)
-
-  function reloadBalanceVBC() {
-    return vbcContract
-      .balanceOf(accountData.address)
-      .then((bal) => {
-        accountData.balanceVBC = bal
-        modal.find('#balanceVBC').prop('innerText', formatEther(bal))
-        return bal
-      })
-      .catch((error) => alertError({ title: 'Failed to get VBC balance', error: error }))
-  }
 
   function reloadAllowanceVBC() {
     return vbcContract
@@ -1076,6 +1068,8 @@ function onExchangeARMClicked(event) {
       .catch((error) => alertError({ title: 'Failed to get VBC allowance', error: error }))
   }
   function reloadStakedVBC() {
+    var ethersProvider = new Web3Provider(window.ethereum, 'any')
+    var armContract = new Contract(armContractAddr, armAbi, ethersProvider)
     return armContract
       .getExchangeInfo(accountData.address)
       .then((result) => {
@@ -1086,24 +1080,21 @@ function onExchangeARMClicked(event) {
       })
       .catch((error) => alertError({ title: 'Failed to get staked VBC', error: error }))
   }
-
-  var ethersProvider = new Web3Provider(window.ethereum, 'any')
-  var armContract = new Contract(armContractAddr, armAbi, ethersProvider.getSigner())
-  //Get vbc contract address
-  armContract
-    .SrcTokenAddr()
-    .then((addr) => {
-      if (!addr || addr == 0) {
-        alertError('VBC contract address unavailable')
-        return
-      }
-      vbcContract = new Contract(addr, vbcAbi, ethersProvider.getSigner())
-      reloadBalanceVBC()
-      reloadAllowanceVBC()
+  if (vbcContract) {
+    reloadAllowanceVBC()
+    reloadStakedVBC()
+    reloadBalanceVBC().then((bal) => {
+      modal.find('#balanceVBC').prop('innerText', bal ? formatEther(bal) : '-')
+      return bal
     })
-    .catch((error) => alertError({ title: 'Failed to get VBC contract address', error: error }))
-
-  reloadStakedVBC()
+  } else {
+    reloadBalanceVBC().then((bal) => {
+      modal.find('#balanceVBC').prop('innerText', bal ? formatEther(bal) : '-')
+      reloadAllowanceVBC()
+      reloadStakedVBC()
+      return bal
+    })
+  }
 
   modal.find('#approve').on('click', function () {
     var val = 0
@@ -1180,8 +1171,12 @@ function onExchangeARMClicked(event) {
           .then((result) =>
             showToastTransaction('Stake VBC', result).then((receipt) => {
               if (receipt.status == 1) {
-                reloadBalanceARM().then((bal) => modal.find('#balanceARM').prop('innerText', formatEther(bal)))
-                reloadBalanceVBC()
+                reloadBalanceARM().then((bal) =>
+                  modal.find('#balanceARM').prop('innerText', bal ? formatEther(bal) : '-')
+                )
+                reloadBalanceVBC().then((bal) =>
+                  modal.find('#balanceVBC').prop('innerText', bal ? formatEther(bal) : '-')
+                )
                 reloadStakedVBC()
                 reloadAllowanceVBC()
                 modal.find('#stake').prop('disabled', false).find('.spinner-border').prop('hidden', true)
@@ -1230,8 +1225,12 @@ function onExchangeARMClicked(event) {
           .then((result) =>
             showToastTransaction('Unstake VBC', result).then((receipt) => {
               if (receipt.status == 1) {
-                reloadBalanceARM().then((bal) => modal.find('#balanceARM').prop('innerText', formatEther(bal)))
-                reloadBalanceVBC()
+                reloadBalanceARM().then((bal) =>
+                  modal.find('#balanceARM').prop('innerText', bal ? formatEther(bal) : '-')
+                )
+                reloadBalanceVBC().then((bal) =>
+                  modal.find('#balanceVBC').prop('innerText', bal ? formatEther(bal) : '-')
+                )
                 reloadStakedVBC()
                 modal.find('#unstake').prop('disabled', false).find('.spinner-border').prop('hidden', true)
               }

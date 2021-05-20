@@ -54,6 +54,7 @@
                   <span class="small">
                     <samp class="text-muted">- RNA: </samp><samp id="balance">-</samp><br />
                     <samp class="text-muted">- ARM: </samp><samp id="balanceARM">-</samp><br />
+                    <samp class="text-muted">- VBC: </samp><samp id="balanceVBC">-</samp><br />
                     <button id="exchangeARM" class="btn btn-outline-primary btn-sm">VBC&#8651;ARM</button><br />
                   </span>
                 </p>
@@ -396,7 +397,7 @@
           <label class="col-sm-9 offset-sm-4 small text-muted">Maximum: <%=stakedARM%><small class="text-muted"> ARM</small></label>
         </div>
         <small class="form-text text-muted">
-            You can not unstake before block <code><%= lockBlock + 86400 %></code>, current block: <code id="currentBlock"><%print(parseInt(lastBlock.number))%></code>.
+            You can not unstake before block <code><%= lockBlock + 86400 %></code>, current block: <code id="currentBlock"><%=parseInt(lastBlock.number)%></code>.
         </small>
       </form>
     </script>
@@ -444,7 +445,7 @@
         <div class="input-group-prepend"><label for="approveVBC" class="input-group-text col-form-label">Limit:</label></div>
         <input id="approveVBC" class="form-control" type="number" min="0" value="10000" />
         <div class="input-group-append"><label class="input-group-text">VBC</label></div>
-        <button id="approve" type="button" class="col-12 col-sm-2 btn btn-sm btn-primary">
+        <button id="approve" type="button" class="col-12 col-sm-4 ml-sm-1 btn btn-sm btn-primary">
           <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" hidden></span>
           Approve
         </button>
