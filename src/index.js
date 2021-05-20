@@ -16,7 +16,7 @@ import { Integrations } from '@sentry/tracing'
 Sentry.init({
   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
   integrations: [new Integrations.BrowserTracing()],
-  release: '0.1.4',
+  release: '0.1.5',
 
   // Set tracesSampleRate to 1.0 to capture 100%
   // of transactions for performance monitoring.
@@ -276,7 +276,7 @@ const onAccountsChanged = async (newAccounts) => {
 
 const onChainIdChanged = async (chainId) => {
   console.debug('Got chain id', chainId)
-  if (!chainId) {
+  if (!chainId || chainId == 0 || chainId == '0x0') {
     alertError('Received invalid chain ID, please check your network.')
     return
   }
