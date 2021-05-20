@@ -16,7 +16,7 @@ import { Integrations } from '@sentry/tracing'
 Sentry.init({
   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
   integrations: [new Integrations.BrowserTracing()],
-  release: '0.1.1',
+  release: '0.1.2',
 
   // Set tracesSampleRate to 1.0 to capture 100%
   // of transactions for performance monitoring.
@@ -34,7 +34,10 @@ function captureWeb3Error(error) {
     error.data ? JSON.stringify(error.data, Object.getOwnPropertyNames(error.data)) : '-'
   )
   var err = new Error(error.code == -32603 && error.data && error.data.message ? error.data.message : error.message)
-  err.stack = error.stack
+  if (error.stake) {
+    console.trace('captureWeb3Error stake')
+    err.stack = error.stack
+  }
   Sentry.captureException(err)
 }
 
@@ -192,6 +195,7 @@ const checkNetwork = async () => {
     return
   }
 
+  console.debug('check network')
   ethereum
     .request({ method: 'eth_chainId' })
     .then((chainId) => {
@@ -202,7 +206,7 @@ const checkNetwork = async () => {
 }
 
 function checkAccounts() {
-  console.debug('checkaccounts')
+  console.debug('check accounts')
   $('#connectButton').prop({ hidden: false, disabled: true }).find('.spinner-border').prop('hidden', false)
   $('#accountDetails').prop('hidden', true)
   var dialog = alertModal({
@@ -271,6 +275,7 @@ const onAccountsChanged = async (newAccounts) => {
 }
 
 const onChainIdChanged = async (chainId) => {
+  console.debug('Got chain id', chainId)
   networkData.chainId = chainId
   for (var geneChainId of geneChainIds) {
     if (chainId == geneChainId.id) {
@@ -290,6 +295,7 @@ const onChainIdChanged = async (chainId) => {
 }
 
 function addNetwork() {
+  console.debug('Add network')
   $('#wrongNetwork').modal('hide')
   var dialog = alertModal({
     title: 'Configuring network',
