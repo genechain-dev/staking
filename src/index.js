@@ -10,13 +10,15 @@ import { Contract } from '@ethersproject/contracts'
 import { formatEther, parseEther } from '@ethersproject/units'
 import { Zero, WeiPerEther } from '@ethersproject/constants'
 import { BigNumber } from '@ethersproject/bignumber'
+import { sha256 } from '@ethersproject/sha2'
+import { arrayify } from '@ethersproject/bytes'
 import * as Sentry from '@sentry/browser'
 import { Integrations } from '@sentry/tracing'
 
 Sentry.init({
   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
   integrations: [new Integrations.BrowserTracing()],
-  release: '0.1.7',
+  release: '0.1.8',
 
   // Set tracesSampleRate to 1.0 to capture 100%
   // of transactions for performance monitoring.
@@ -785,7 +787,7 @@ var stakeDialog = {
         alertError('Insufficient ARM')
         return
       }
-      if (rna.lt(parseEther('1'))) {
+      if (!rna.isZero() && rna.lt(parseEther('1'))) {
         alertError('RNA should be at least 1')
         return
       } else if (!rna.lt(accountData.balance)) {
@@ -1078,6 +1080,32 @@ function onSettleAllClicked(event) {
   })
 }
 
+function decodeRadarAddress(address) {
+  if (address[0] != 'r') throw 'Address should starts with "r"'
+  var Base58 = {
+    alphabet: 'rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz',
+    base: BigNumber.from(58),
+    decode: function (input, minLength) {
+      var bi = BigNumber.from(0)
+      for (var i = 0; i < input.length; i++) {
+        var alphaIndex = Base58.alphabet.indexOf(input[i])
+        if (alphaIndex < 0) throw 'Invalid character: ' + input[i]
+        bi = bi.mul(Base58.base).add(BigNumber.from(alphaIndex))
+      }
+      var bytes = Array.from(arrayify(bi))
+      while (bytes.length < minLength) bytes.unshift(0)
+      return bytes
+    }
+  }
+  var bytes = Base58.decode(address, 25)
+  var hash = bytes.slice(0, 21)
+  var checksum = arrayify(sha256(arrayify(sha256(hash))))
+  if (checksum[0] != bytes[21] || checksum[1] != bytes[22] || checksum[2] != bytes[23] || checksum[3] != bytes[24])
+    throw 'Checksum validation failed!'
+  if (bytes[0] != 0) throw 'Version ' + bytes[0] + ' not supported!'
+  return hash
+}
+
 function onExchangeARMClicked(event) {
   var allowedVBC, stakedVBC
   var data = {
@@ -1281,9 +1309,13 @@ function onExchangeARMClicked(event) {
 
   modal.find('#setMemo').on('click', function () {
     var val = modal.find('#memo').val()
-    if (val.length != 0 && (val.length != 34 || val[0] != 'r')) {
-      alertError('Not a valid radar address')
-      return
+    if (val.length != 0) {
+      try {
+        decodeRadarAddress(val)
+      } catch (error) {
+        alertError({ title: 'Not a valid radar address', message: error })
+        return
+      }
     }
     modal.find('#setMemo').prop('disabled', true).find('.spinner-border').prop('hidden', false)
     var ethersProvider = new Web3Provider(window.ethereum, 'any')
