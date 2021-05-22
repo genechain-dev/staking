@@ -18,7 +18,7 @@ import { Integrations } from '@sentry/tracing'
 Sentry.init({
   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
   integrations: [new Integrations.BrowserTracing()],
-  release: '0.1.8',
+  release: '0.1.9',
 
   // Set tracesSampleRate to 1.0 to capture 100%
   // of transactions for performance monitoring.
@@ -208,7 +208,7 @@ const checkNetwork = async () => {
     .request({ method: 'eth_chainId' })
     .then((chainId) => {
       onChainIdChanged(chainId)
-      ethereum.on('chainChanged', onChainIdChanged)
+      ethereum.on('chainChanged', () => location.reload())
     })
     .catch((error) => alertError({ message: 'Failed to get chain ID', error: error }))
 }
@@ -232,7 +232,7 @@ function checkAccounts() {
 
       if (isMetaMaskConnected()) {
         onAccountsChanged(accounts)
-        ethereum.on('accountsChanged', onAccountsChanged)
+        ethereum.on('accountsChanged', () => location.reload())
       } else {
         $('#connectButton').prop('hidden', false).prop('disabled', false)
       }
@@ -812,6 +812,7 @@ var stakeDialog = {
                   if (!rna.isZero()) reloadBalanceRNA()
                   if (!arm.isZero()) reloadBalanceARM()
                   reloadCandidate(this.model.get('validator'))
+                  reloadBookedProfit()
                 }
               })
             })
@@ -904,6 +905,7 @@ function onUnstakeClicked(event) {
                 if (!rna.isZero()) reloadBalanceRNA()
                 if (!arm.isZero()) reloadBalanceARM()
                 reloadCandidate(model.get('validator'))
+                reloadBookedProfit()
               }
             })
           })
