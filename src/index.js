@@ -4,7 +4,7 @@ import 'bootstrap/js/dist/toast'
 import 'backbone'
 import _ from 'underscore'
 import MetaMaskOnboarding from '@metamask/onboarding'
-import { armContractAddr, armAbi, riboseContractAddr, riboseAbi, vbcAbi } from './constants.json'
+import contractInfo from './constants.json'
 import { Web3Provider } from '@ethersproject/providers'
 import { Contract } from '@ethersproject/contracts'
 import { Interface } from '@ethersproject/abi'
@@ -12,15 +12,16 @@ import { formatEther, parseEther } from '@ethersproject/units'
 import { Zero, WeiPerEther } from '@ethersproject/constants'
 import { BigNumber } from '@ethersproject/bignumber'
 import { sha256 } from '@ethersproject/sha2'
+import { id } from '@ethersproject/hash'
 import { arrayify } from '@ethersproject/bytes'
-import { version } from '../package.json'
+import packageInfo from '../package.json'
 
 // import * as Sentry from '@sentry/browser'
 // import { Integrations } from '@sentry/tracing'
 // Sentry.init({
 //   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
 //   integrations: [new Integrations.BrowserTracing()],
-//   release: version,
+//   release: packageInfo.version,
 
 //   // Set tracesSampleRate to 1.0 to capture 100%
 //   // of transactions for performance monitoring.
@@ -32,24 +33,27 @@ import { version } from '../package.json'
 import Bugsnag from '@bugsnag/js'
 Bugsnag.start({
   apiKey: '93c7dfd149a1faf45a515447e85a0ed8',
-  appVersion: version
+  appVersion: packageInfo.version
 })
 const captureFn = Bugsnag.notify
 
 function captureWeb3Error(error) {
   if (error.code == 4001) return
 
-  var err = new Error(error.code == -32603 && error.data && error.data.message ? error.data.message : error.message)
-
-  if (error.data && error.data.stack) {
-    error.captureStack = err.stack
-    err.stack = error.data.stack
-  } else if (error.stack && error.stack != 'Error: ' + error.message) {
-    error.captureStack = err.stack
-    err.stack = error.stack
+  var preferErrorData = error.code == -32603 && error.data
+  var err
+  if (preferErrorData && error.data instanceof Error) {
+    err = error.data
+  } else if (error instanceof Error) {
+    err = error
+  } else {
+    err = new Error(preferErrorData && error.data.message ? error.data.message : error.message)
   }
   // captureFn(err, { extra: error })  // Sentry
-  captureFn(err, (event) => event.addMetadata('details', error)) // Bugsnag
+  captureFn(err, (event) => {
+    event.groupingHash = id(err.stack)
+    event.addMetadata('details', error)
+  }) // Bugsnag
 }
 
 const geneChainIds = [
@@ -503,7 +507,7 @@ let vbcContract
 
 function reloadBalanceARM() {
   var ethersProvider = new Web3Provider(window.ethereum, 'any')
-  var armContract = new Contract(armContractAddr, armAbi, ethersProvider)
+  var armContract = new Contract(contractInfo.armContractAddr, contractInfo.armAbi, ethersProvider)
   return armContract
     .balanceOf(accountData.address)
     .then((amount) => {
@@ -528,11 +532,11 @@ function reloadBalanceVBC() {
   }
   if (!vbcContract) {
     var ethersProvider = new Web3Provider(window.ethereum, 'any')
-    var armContract = new Contract(armContractAddr, armAbi, ethersProvider)
+    var armContract = new Contract(contractInfo.armContractAddr, contractInfo.armAbi, ethersProvider)
     return armContract
       .SrcTokenAddr()
       .then((addr) => {
-        vbcContract = new Contract(addr, vbcAbi, ethersProvider.getSigner())
+        vbcContract = new Contract(addr, contractInfo.vbcAbi, ethersProvider.getSigner())
         console.debug('vbc contract', addr)
         return loadBalanceVBC()
       })
@@ -543,7 +547,7 @@ function reloadBalanceVBC() {
 
 function reloadBookedProfit() {
   var ethersProvider = new Web3Provider(window.ethereum, 'any')
-  var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider)
+  var riboseContract = new Contract(contractInfo.riboseContractAddr, contractInfo.riboseAbi, ethersProvider)
   return riboseContract
     .getBookedProfit(accountData.address)
     .then((profit) => {
@@ -574,7 +578,7 @@ const reloadBalance = async () => {
 
 const reloadStakedCandidate = async (candidate) => {
   var ethersProvider = new Web3Provider(window.ethereum, 'any')
-  var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider)
+  var riboseContract = new Contract(contractInfo.riboseContractAddr, contractInfo.riboseAbi, ethersProvider)
   var info = await riboseContract.getCandidateStakeInfo(candidate.get('validator'))
   console.debug('candidate info', candidate.get('validator'), info)
   candidate.set({
@@ -601,7 +605,7 @@ const reloadStakedCandidate = async (candidate) => {
 
 const reloadTopCandidate = async (candidate) => {
   var ethersProvider = new Web3Provider(window.ethereum, 'any')
-  var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider)
+  var riboseContract = new Contract(contractInfo.riboseContractAddr, contractInfo.riboseAbi, ethersProvider)
   var s = staked.findWhere({ validator: candidate.get('validator') })
   if (s) {
     // already loaded in staked candidates
@@ -644,7 +648,7 @@ const reloadCandidate = async (address) => {
     s.set({ ready: false })
   } else {
     var ethersProvider = new Web3Provider(window.ethereum, 'any')
-    var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider)
+    var riboseContract = new Contract(contractInfo.riboseContractAddr, contractInfo.riboseAbi, ethersProvider)
     var stakedCandidates = await riboseContract.getStakedCandidates(accounts[0])
     console.debug('staked candidates', stakedCandidates)
     if (stakedCandidates.length > 0 && stakedCandidates.indexOf(address) >= 0) {
@@ -666,7 +670,7 @@ const reloadValidators = async () => {
   $('#stakedCandidates').find('.spinner-border').prop('hidden', false)
 
   var ethersProvider = new Web3Provider(window.ethereum, 'any')
-  var riboseContract = new Contract(riboseContractAddr, riboseAbi, ethersProvider)
+  var riboseContract = new Contract(contractInfo.riboseContractAddr, contractInfo.riboseAbi, ethersProvider)
 
   // load staked candidates
   var stakedCandidates = await riboseContract.getStakedCandidates(accounts[0])
@@ -725,9 +729,9 @@ var stakeDialog = {
     },
     loadAllowrance: function () {
       var ethersProvider = new Web3Provider(window.ethereum, 'any')
-      var armContract = new Contract(armContractAddr, armAbi, ethersProvider.getSigner())
+      var armContract = new Contract(contractInfo.armContractAddr, contractInfo.armAbi, ethersProvider.getSigner())
       return armContract
-        .allowance(accountData.address, riboseContractAddr)
+        .allowance(accountData.address, contractInfo.riboseContractAddr)
         .then((result) => {
           this.allowedARM = result
           this.$el.find('#allowedARM').prop('innerText', formatEther(result))
@@ -752,7 +756,13 @@ var stakeDialog = {
       }
 
       this.$el.find('#approve').prop('disabled', true).find('.spinner-border').prop('hidden', false)
-      estimateAndCall(armContractAddr, armAbi, 'approve', riboseContractAddr, val)
+      estimateAndCall(
+        contractInfo.armContractAddr,
+        contractInfo.armAbi,
+        'approve',
+        contractInfo.riboseContractAddr,
+        val
+      )
         .then((result) =>
           showToastTransaction('Approve ARM', result).then((receipt) => {
             if (receipt && receipt.status == 1) {
@@ -804,7 +814,14 @@ var stakeDialog = {
         return
       }
       this.$('#confirm').prop('disabled', true).find('.spinner-border').prop('hidden', false)
-      estimateAndCall(riboseContractAddr, riboseAbi, 'stake', this.model.get('validator'), arm, { value: rna })
+      estimateAndCall(
+        contractInfo.riboseContractAddr,
+        contractInfo.riboseAbi,
+        'stake',
+        this.model.get('validator'),
+        arm,
+        { value: rna }
+      )
         .then((result) => {
           this.close()
           showToastTransaction('Stake', result).then((receipt) => {
@@ -884,7 +901,14 @@ function onUnstakeClicked(event) {
     }
 
     modal.find('#confirm').prop('disabled', true).find('.spinner-border').prop('hidden', false)
-    estimateAndCall(riboseContractAddr, riboseAbi, 'unstake', model.get('validator'), rna, arm)
+    estimateAndCall(
+      contractInfo.riboseContractAddr,
+      contractInfo.riboseAbi,
+      'unstake',
+      model.get('validator'),
+      rna,
+      arm
+    )
       .then((result) => {
         modal.modal('hide')
         showToastTransaction('Unstake', result).then((receipt) => {
@@ -920,7 +944,12 @@ var settleDialog = {
 
     submit: async function (event) {
       this.$('#confirm').prop('disabled', true).find('.spinner-border').prop('hidden', false)
-      estimateAndCall(riboseContractAddr, riboseAbi, 'settleStakerProfit', this.model.get('validator'))
+      estimateAndCall(
+        contractInfo.riboseContractAddr,
+        contractInfo.riboseAbi,
+        'settleStakerProfit',
+        this.model.get('validator')
+      )
         .then((result) => {
           this.close()
           showToastTransaction('Settle reward', result).then((receipt) => {
@@ -974,7 +1003,12 @@ function onWithdrawClicked(event) {
   var modal = alertModal(data)
   modal.find('#withdraw').on('click', function () {
     modal.find('#withdraw').prop('disabled', true).find('.spinner-border').prop('hidden', false)
-    estimateAndCall(riboseContractAddr, riboseAbi, 'withdrawStakerProfits', accountData.address)
+    estimateAndCall(
+      contractInfo.riboseContractAddr,
+      contractInfo.riboseAbi,
+      'withdrawStakerProfits',
+      accountData.address
+    )
       .then((result) => {
         modal.modal('hide')
         showToastTransaction('Withdraw profit', result).then((receipt) => {
@@ -1005,7 +1039,7 @@ function onSettleAllClicked(event) {
   var modal = alertModal(data)
   modal.find('#confirm').on('click', function () {
     modal.find('#confirm').prop('disabled', true).find('.spinner-border').prop('hidden', false)
-    estimateAndCall(riboseContractAddr, riboseAbi, 'settleAllStakerProfit')
+    estimateAndCall(contractInfo.riboseContractAddr, contractInfo.riboseAbi, 'settleAllStakerProfit')
       .then((result) => {
         modal.modal('hide')
         showToastTransaction('Settle all', result).then((receipt) => {
@@ -1060,7 +1094,7 @@ function onExchangeARMClicked(event) {
 
   function reloadAllowanceVBC() {
     return vbcContract
-      .allowance(accountData.address, armContractAddr)
+      .allowance(accountData.address, contractInfo.armContractAddr)
       .then((result) => {
         allowedVBC = result
         modal.find('#allowedVBC').prop('innerText', formatEther(result))
@@ -1073,7 +1107,7 @@ function onExchangeARMClicked(event) {
   }
   function reloadStakedVBC() {
     var ethersProvider = new Web3Provider(window.ethereum, 'any')
-    var armContract = new Contract(armContractAddr, armAbi, ethersProvider)
+    var armContract = new Contract(contractInfo.armContractAddr, contractInfo.armAbi, ethersProvider)
     return armContract
       .getExchangeInfo(accountData.address)
       .then((result) => {
@@ -1115,7 +1149,7 @@ function onExchangeARMClicked(event) {
 
     modal.find('#approve').prop('disabled', true).find('.spinner-border').prop('hidden', false)
 
-    estimateAndCall(vbcContract, vbcAbi, 'approve', armContractAddr, val)
+    estimateAndCall(vbcContract, contractInfo.vbcAbi, 'approve', contractInfo.armContractAddr, val)
       .then((result) =>
         showToastTransaction('Approve VBC', result).then((receipt) => {
           if (receipt && receipt.status == 1) {
@@ -1152,7 +1186,7 @@ function onExchangeARMClicked(event) {
     }
 
     modal.find('#stake').prop('disabled', true).find('.spinner-border').prop('hidden', false)
-    estimateAndCall(armContractAddr, armAbi, 'exchange', val)
+    estimateAndCall(contractInfo.armContractAddr, contractInfo.armAbi, 'exchange', val)
       .then((result) =>
         showToastTransaction('Stake VBC', result).then((receipt) => {
           if (receipt && receipt.status == 1) {
@@ -1189,7 +1223,7 @@ function onExchangeARMClicked(event) {
       return
     }
     modal.find('#unstake').prop('disabled', true).find('.spinner-border').prop('hidden', false)
-    estimateAndCall(armContractAddr, armAbi, 'burn', val)
+    estimateAndCall(contractInfo.armContractAddr, contractInfo.armAbi, 'burn', val)
       .then((result) =>
         showToastTransaction('Unstake VBC', result).then((receipt) => {
           if (receipt && receipt.status == 1) {
@@ -1217,7 +1251,7 @@ function onExchangeARMClicked(event) {
       }
     }
     modal.find('#setMemo').prop('disabled', true).find('.spinner-border').prop('hidden', false)
-    estimateAndCall(armContractAddr, armAbi, 'setMemo', val)
+    estimateAndCall(contractInfo.armContractAddr, contractInfo.armAbi, 'setMemo', val)
       .then((result) =>
         showToastTransaction('Set ARM staking memo', result).then((receipt) => {
           if (receipt && receipt.status == 1) {

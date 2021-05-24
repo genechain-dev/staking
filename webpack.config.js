@@ -14,9 +14,8 @@ module.exports = {
   mode: 'development',
   entry: './src/index.js',
   output: {
-    filename: './[name].[contenthash].js',
-    path: DIST,
-    publicPath: ''
+    filename: '[name].[contenthash].js',
+    path: DIST
   },
   devServer: {
     contentBase: DIST,
@@ -47,7 +46,9 @@ module.exports = {
     process.env.BUGSNAG_API_KEY
       ? new BugsnagSourceMapUploaderPlugin({
           apiKey: process.env.BUGSNAG_API_KEY,
-          appVersion: process.env.npm_package_version
+          appVersion: process.env.npm_package_version,
+          publicPath: 'https://staking.genechain.io',
+          overwrite: true
         })
       : false,
     process.env.SENTRY_AUTH_TOKEN
