@@ -12,19 +12,28 @@ import { Zero, WeiPerEther } from '@ethersproject/constants'
 import { BigNumber } from '@ethersproject/bignumber'
 import { sha256 } from '@ethersproject/sha2'
 import { arrayify } from '@ethersproject/bytes'
-import * as Sentry from '@sentry/browser'
-import { Integrations } from '@sentry/tracing'
+import { version } from '../package.json'
 
-Sentry.init({
-  dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
-  integrations: [new Integrations.BrowserTracing()],
-  release: '0.1.9',
+// import * as Sentry from '@sentry/browser'
+// import { Integrations } from '@sentry/tracing'
+// Sentry.init({
+//   dsn: 'https://e3954ef02f76484a86a18d2883699851@o687555.ingest.sentry.io/5773078',
+//   integrations: [new Integrations.BrowserTracing()],
+//   release: version,
 
-  // Set tracesSampleRate to 1.0 to capture 100%
-  // of transactions for performance monitoring.
-  // We recommend adjusting this value in production
-  tracesSampleRate: 0.01
+//   // Set tracesSampleRate to 1.0 to capture 100%
+//   // of transactions for performance monitoring.
+//   // We recommend adjusting this value in production
+//   tracesSampleRate: 0.01
+// })
+// const captureFn = Sentry.captureException
+
+import Bugsnag from '@bugsnag/js'
+Bugsnag.start({
+  apiKey: '93c7dfd149a1faf45a515447e85a0ed8',
+  appVersion: version
 })
+const captureFn = Bugsnag.notify
 
 function captureWeb3Error(error) {
   if (error.code == 4001) return
@@ -45,7 +54,7 @@ function captureWeb3Error(error) {
     console.debug('capture stack', err.stack)
     err.stack = error.stack
   }
-  Sentry.captureException(err)
+  captureFn(err)
 }
 
 const geneChainIds = [
@@ -78,13 +87,13 @@ const initialize = () => {
     onboarding = new MetaMaskOnboarding()
   } catch (error) {
     console.error(error)
-    Sentry.captureException(error)
+    captureFn(error)
   }
   try {
     checkNetwork()
   } catch (error) {
     console.error(error)
-    Sentry.captureException(error)
+    captureFn(error)
   }
 }
 window.addEventListener('DOMContentLoaded', initialize)

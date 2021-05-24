@@ -3,6 +3,7 @@ const { CleanWebpackPlugin } = require('clean-webpack-plugin')
 const CopyPlugin = require('copy-webpack-plugin')
 const HtmlWebpackPlugin = require('html-webpack-plugin')
 const SentryWebpackPlugin = require('@sentry/webpack-plugin')
+const { BugsnagSourceMapUploaderPlugin } = require('webpack-bugsnag-plugins')
 
 const webpack = require('webpack')
 
@@ -43,12 +44,18 @@ module.exports = {
         }
       ]
     }),
-    process.env.NODE_ENV === 'production'
+    process.env.BUGSNAG_API_KEY
+      ? new BugsnagSourceMapUploaderPlugin({
+          apiKey: process.env.BUGSNAG_API_KEY,
+          appVersion: process.env.npm_package_version
+        })
+      : false,
+    process.env.SENTRY_AUTH_TOKEN
       ? new SentryWebpackPlugin({
           authToken: process.env.SENTRY_AUTH_TOKEN,
           org: 'genechain',
           project: 'staking',
-          release: process.env.SENTRY_RELEASE,
+          release: process.env.npm_package_version,
           // webpack specific configuration
           include: '.',
           ignore: ['node_modules', 'webpack.config.js']

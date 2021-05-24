@@ -1,6 +1,6 @@
 {
   "name": "@genechain-io/staking",
-  "version": "0.0.1",
+  "version": "0.1.9",
   "description": "GeneChain Staking.",
   "engines": {
     "node": ">= 10"
@@ -47,7 +47,11 @@
     "raw-loader": "^4.0.2",
     "static-server": "^2.2.1",
     "webpack": "^5.35.1",
+    "webpack-bugsnag-plugins": "^1.7.0",
     "webpack-cli": "^3.3.12",
     "webpack-dev-server": "^3.11.0"
+  },
+  "dependencies": {
+    "@bugsnag/js": "^7.10.0"
   }
 }
