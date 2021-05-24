@@ -42,10 +42,10 @@ function captureWeb3Error(error) {
   var err = new Error(error.code == -32603 && error.data && error.data.message ? error.data.message : error.message)
 
   if (error.data && error.data.stack) {
-    error.data.captureStack = err.stack
+    error.captureStack = err.stack
     err.stack = error.data.stack
   } else if (error.stack && error.stack != 'Error: ' + error.message) {
-    error.data.captureStack = err.stack
+    error.captureStack = err.stack
     err.stack = error.stack
   }
   // captureFn(err, { extra: error })  // Sentry
