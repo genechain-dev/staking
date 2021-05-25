@@ -1,6 +1,6 @@
 {
   "name": "@genechain-io/staking",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "GeneChain Staking.",
   "engines": {
     "node": ">= 10"

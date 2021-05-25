@@ -8,7 +8,7 @@ import contractInfo from './constants.json'
 import { Web3Provider } from '@ethersproject/providers'
 import { Contract } from '@ethersproject/contracts'
 import { Interface } from '@ethersproject/abi'
-import { formatEther, parseEther } from '@ethersproject/units'
+import { formatEther, parseEther, parseUnits } from '@ethersproject/units'
 import { Zero, WeiPerEther } from '@ethersproject/constants'
 import { BigNumber } from '@ethersproject/bignumber'
 import { sha256 } from '@ethersproject/sha2'
@@ -173,6 +173,18 @@ function showToastError(params) {
 
 function showToastTransaction(title, tx) {
   console.debug('Got transaction', tx)
+  if (tx.gasPrice.isZero()) {
+    var error = { code: -32600, message: 'Transaction with zero gas price will mostly fail', data: tx }
+    showToastError({
+      title: title + ' will mostly fail',
+      titleClasses: 'bg-danger text-white',
+      autohide: false,
+      message: 'Transaction hash: <samp class="text-break">' + tx.hash + '</samp>',
+      error: error
+    })
+    return Promise.reject(error)
+  }
+
   var toast = showToast({
     title: title,
     decor: '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>',
@@ -202,6 +214,7 @@ function showToastTransaction(title, tx) {
         message: 'Transaction hash: <samp class="text-break">' + tx.hash + '</samp>',
         error: error
       })
+      return Promise.reject(error)
     })
     .then((receipt) => {
       toast.toast('hide')
@@ -225,6 +238,7 @@ function estimateAndCall(contract, abi, method, ...args) {
       overrides = args.pop()
     }
     overrides.gasLimit = gas.mul(BigNumber.from(15000)).div(BigNumber.from(10000))
+    overrides.gasPrice = parseUnits(networkData.chainId == 80 ? '1' : '10', 'gwei')
     console.debug('call', contract, method, ...args, overrides)
     return c.functions[method](...args, overrides)
   })
@@ -506,7 +520,10 @@ function reloadBalanceRNA() {
       $('#accountDetail').find('#balance').prop('innerText', formatEther(amount))
       return amount
     })
-    .catch((error) => alertError({ title: 'Failed to get RNA balance', error: error }))
+    .catch((error) => {
+      alertError({ title: 'Failed to get RNA balance', error: error })
+      return Promise.reject(error)
+    })
 }
 
 let vbcContract
@@ -522,7 +539,10 @@ function reloadBalanceARM() {
       $('#accountDetail').find('#balanceARM').prop('innerText', formatEther(amount))
       return amount
     })
-    .catch((error) => showToastError({ title: 'Failed to get ARM balance', error: error }))
+    .catch((error) => {
+      showToastError({ title: 'Failed to get ARM balance', error: error })
+      return Promise.reject(error)
+    })
 }
 
 function reloadBalanceVBC() {
@@ -534,7 +554,10 @@ function reloadBalanceVBC() {
         $('#accountDetail').find('#balanceVBC').prop('innerText', formatEther(amount))
         return amount
       })
-      .catch((error) => showToastError({ title: 'Failed to get VBC balance', error: error }))
+      .catch((error) => {
+        showToastError({ title: 'Failed to get VBC balance', error: error })
+        return Promise.reject(error)
+      })
   }
   if (!vbcContract) {
     var ethersProvider = new Web3Provider(window.ethereum, 'any')
@@ -546,7 +569,10 @@ function reloadBalanceVBC() {
         console.debug('vbc contract', addr)
         return loadBalanceVBC()
       })
-      .catch((error) => showToastError({ title: 'Failed to get VBC contract address', error: error }))
+      .catch((error) => {
+        showToastError({ title: 'Failed to get VBC contract address', error: error })
+        return Promise.reject(error)
+      })
   }
   return loadBalanceVBC()
 }
@@ -562,11 +588,13 @@ function reloadBookedProfit() {
       if (!profit.isZero())
         $('#accountDetail').find('#withdrawProfit').off('click').on('click', onWithdrawClicked).prop('hidden', false)
       else $('#accountDetail').find('#withdrawProfit').prop('hidden', true)
+      return profit
     })
     .catch((error) => {
       $('#accountDetail').find('#profit').prop('innerText', '-')
       $('#accountDetail').find('#withdrawProfit').prop('hidden', true)
       showToastError({ title: 'Failed to get settled profit', error: error })
+      return Promise.reject(error)
     })
 }
 
@@ -746,7 +774,10 @@ var stakeDialog = {
           this.$el.find('#approve').off('click').on('click', this.approve.bind(this))
           return result
         })
-        .catch((error) => alertError({ title: 'Failed to get ARM allowance', error: error }))
+        .catch((error) => {
+          alertError({ title: 'Failed to get ARM allowance', error: error })
+          return Promise.reject(error)
+        })
     },
     approve: function () {
       var val = 0
@@ -1121,7 +1152,10 @@ function onExchangeARMClicked(event) {
         modal.find('#stakeDiv').prop('hidden', result.lt(WeiPerEther))
         return result
       })
-      .catch((error) => alertError({ title: 'Failed to get VBC allowance', error: error }))
+      .catch((error) => {
+        alertError({ title: 'Failed to get VBC allowance', error: error })
+        return Promise.reject(error)
+      })
   }
   function reloadStakedVBC() {
     var ethersProvider = new Web3Provider(window.ethereum, 'any')
@@ -1134,7 +1168,10 @@ function onExchangeARMClicked(event) {
         modal.find('#stakedVBC').prop('innerText', formatEther(result[1]))
         return result
       })
-      .catch((error) => alertError({ title: 'Failed to get staked VBC', error: error }))
+      .catch((error) => {
+        alertError({ title: 'Failed to get staked VBC', error: error })
+        return Promise.reject(error)
+      })
   }
   if (vbcContract) {
     reloadAllowanceVBC()
