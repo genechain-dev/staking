@@ -811,7 +811,7 @@ var stakeDialog = {
       } else if (arm.gt(accountData.balanceARM)) {
         alertError('Insufficient ARM')
         return
-      } else if (arm.gt(allowedARM)) {
+      } else if (arm.gt(this.allowedARM)) {
         alertError('Cannot stake more then allowance')
         return
       }
