@@ -28,7 +28,8 @@ import packageInfo from '../package.json'
 //   // We recommend adjusting this value in production
 //   tracesSampleRate: 0.01
 // })
-// const captureFn = (error, originalErr) => Sentry.captureException(err, { extra: error })
+// const captureFn = (error, originalErr) =>
+//   Sentry.captureException(error, { contexts: { account: accountData, details: originalErr } })
 // const captureSetUser = (id) => Sentry.setUser({ id: id })
 
 import Bugsnag from '@bugsnag/js'
@@ -40,6 +41,7 @@ const captureFn = (error, originalErr) =>
   Bugsnag.notify(error, (event) => {
     event.groupingHash = id(error.stack)
     event.addMetadata('details', originalErr)
+    event.addMetadata('account', accountData)
   })
 const captureSetUser = Bugsnag.setUser
 
