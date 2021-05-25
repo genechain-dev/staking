@@ -320,7 +320,7 @@
               </div>
               <div class="form-group row no-gutters m-0">
                 <label for="rna" class="col-sm-3 col-form-label">RNA to stake:</label>
-                <div class="col-11 col-sm-2">
+                <div class="col-11 col-sm-3">
                     <input id="rna" class="form-control" type="number" min="1"/>
                 </div>
                 <label class="col-1 col-form-label text-muted">RNA</label>
@@ -330,7 +330,7 @@
               </div>
               <div class="form-group row no-gutters m-0">
                 <label for="arm" class="col-sm-3 col-form-label">ARM to stake:</label>
-                <div class="col-11 col-sm-2">
+                <div class="col-11 col-sm-3">
                     <input id="arm" class="form-control" type="number" min="0" disabled/>
                 </div>
                 <label class="col-1 col-form-label text-muted">ARM</label>
@@ -378,7 +378,7 @@
         </div>
         <div class="form-group row no-gutters m-0">
             <label for="rna" class="col-sm-4 col-form-label">RNA to unstake:</label>
-            <div class="col-11 col-sm-2">
+            <div class="col-11 col-sm-3">
                 <input id="rna" class="form-control" type="number" min="1"/>
             </div>
             <label class="col-1 col-form-label text-muted">RNA</label>
@@ -388,7 +388,7 @@
         </div>
         <div class="form-group row no-gutters m-0">
             <label for="arm" class="col-sm-4 col-form-label">ARM to unstake:</label>
-            <div class="col-11 col-sm-2">
+            <div class="col-11 col-sm-3">
                 <input id="arm" class="form-control" type="number" min="0" />
             </div>
             <label class="col-1 col-form-label text-muted">ARM</label>
@@ -397,7 +397,7 @@
           <label class="col-sm-9 offset-sm-4 small text-muted">Maximum: <%=stakedARM%><small class="text-muted"> ARM</small></label>
         </div>
         <small class="form-text text-muted">
-            You can not unstake before block <code><%= lockBlock + 86400 %></code>, current block: <code id="currentBlock"><%=parseInt(lastBlock.number)%></code>.
+            You can not unstake before block <code><%= lockBlock + 86400 %></code>, current block: <code id="currentBlock"><%=parseInt(lastBlock)%></code>.
         </small>
       </form>
     </script>

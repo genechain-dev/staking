@@ -877,13 +877,13 @@ function onUnstakeClicked(event) {
   var modal = alertModal(data)
   modal.find('#confirm').prop('disabled', true).find('.spinner-border').prop('hidden', false)
 
-  ethereum.request({ method: 'eth_getBlockByNumber', params: ['latest', false] }).then((result) => {
+  ethereum.request({ method: 'eth_blockNumber', params: [] }).then((result) => {
     console.debug('latest block', result)
     networkData.lastBlock = result
-    modal.find('#currentBlock').prop('innerText', parseInt(result.number))
+    modal.find('#currentBlock').prop('innerText', parseInt(result))
     modal
       .find('#confirm')
-      .prop('disabled', model.get('lockBlock') + 86400 > result.number)
+      .prop('disabled', model.get('lockBlock') + 86400 > result)
       .find('.spinner-border')
       .prop('hidden', true)
   })
@@ -901,6 +901,14 @@ function onUnstakeClicked(event) {
     }
     if (arm.isZero() && rna.isZero()) {
       alertError('RNA and ARM can not be both 0')
+      return
+    }
+    if (rna.gt(parseEther(model.get('stakedRNA')))) {
+      alertError('Not enough RNA to unstake')
+      return
+    }
+    if (arm.gt(parseEther(model.get('stakedARM')))) {
+      alertError('Not enough ARM to unstake')
       return
     }
 
