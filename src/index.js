@@ -811,6 +811,9 @@ var stakeDialog = {
       } else if (arm.gt(accountData.balanceARM)) {
         alertError('Insufficient ARM')
         return
+      } else if (arm.gt(allowedARM)) {
+        alertError('Cannot stake more then allowance')
+        return
       }
       if (!rna.isZero() && rna.lt(parseEther('1'))) {
         alertError('RNA should be at least 1')
