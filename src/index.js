@@ -1102,7 +1102,8 @@ function decodeRadarAddress(address) {
 }
 
 function onExchangeARMClicked(event) {
-  var allowedVBC, stakedVBC
+  var allowedVBC = Zero,
+    stakedVBC
   var data = {
     title: 'Mint ARM',
     message: _.template($('#exchange-arm-template').html())(accountData)
