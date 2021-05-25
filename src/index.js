@@ -28,14 +28,20 @@ import packageInfo from '../package.json'
 //   // We recommend adjusting this value in production
 //   tracesSampleRate: 0.01
 // })
-// const captureFn = Sentry.captureException
+// const captureFn = (error, originalErr) => Sentry.captureException(err, { extra: error })
+// const captureSetUser = (id) => Sentry.setUser({ id: id })
 
 import Bugsnag from '@bugsnag/js'
 Bugsnag.start({
   apiKey: '93c7dfd149a1faf45a515447e85a0ed8',
   appVersion: packageInfo.version
 })
-const captureFn = Bugsnag.notify
+const captureFn = (error, originalErr) =>
+  Bugsnag.notify(error, (event) => {
+    event.groupingHash = id(error.stack)
+    event.addMetadata('details', originalErr)
+  })
+const captureSetUser = Bugsnag.setUser
 
 function captureWeb3Error(error) {
   if (error.code == 4001) return
@@ -46,14 +52,11 @@ function captureWeb3Error(error) {
     err = error.data
   } else if (error instanceof Error) {
     err = error
+    if (err.stack == 'Error: ' + err.message) err.stack = new Error().stack
   } else {
     err = new Error(preferErrorData && error.data.message ? error.data.message : error.message)
   }
-  // captureFn(err, { extra: error })  // Sentry
-  captureFn(err, (event) => {
-    event.groupingHash = id(err.stack)
-    event.addMetadata('details', error)
-  }) // Bugsnag
+  captureFn(err, error)
 }
 
 const geneChainIds = [
@@ -302,6 +305,7 @@ const onAccountsChanged = async (newAccounts) => {
     $('#connectButton').prop('hidden', true)
     $('.toast').remove()
     accountData.address = accounts[0]
+    captureSetUser(accounts[0])
 
     reloadBalance()
     reloadValidators()

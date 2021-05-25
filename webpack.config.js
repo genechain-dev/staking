@@ -58,8 +58,8 @@ module.exports = {
           project: 'staking',
           release: process.env.npm_package_version,
           // webpack specific configuration
-          include: '.',
-          ignore: ['node_modules', 'webpack.config.js']
+          include: 'dist',
+          stripPrefix: ['~/dist/']
         })
       : false
   ].filter(Boolean)
