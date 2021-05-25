@@ -239,7 +239,7 @@ function estimateAndCall(contract, abi, method, ...args) {
     }
     overrides.gasLimit = gas.mul(BigNumber.from(15000)).div(BigNumber.from(10000))
     overrides.gasPrice = parseUnits(networkData.chainId == 80 ? '1' : '10', 'gwei')
-    console.debug('call', contract, method, ...args, overrides)
+    console.debug('call', c.address, method, ...args, overrides)
     return c.functions[method](...args, overrides)
   })
 }
@@ -388,6 +388,12 @@ function addNetwork() {
         _.extend(data, {
           title: 'Can not open metamask',
           message: 'Please open MetaMask manually to make sure no operation is in progress and then click Retry.'
+        })
+      else if (error.code == -32601)
+        _.extend(data, {
+          message:
+            'Add network seems not supported by your MetaMask. Upgrade your metamask or follow the steps in https://github.com/genechain-io/geneth/wiki/Metamask to setup manually.',
+          buttons: []
         })
       var errDialog = alertError(data)
       errDialog.find('#retry').on('click', errDialog.modal.bind(errDialog, 'hide')).on('click', addNetwork)
